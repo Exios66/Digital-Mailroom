@@ -52,7 +52,7 @@ Every agent still goes through `get_llm()`. Flip back with
 
 - Do not use Modal for pytest or `--mock`.
 - Do not rename the app to the sandbox name.
-- Sibling `llm-entity-extraction` can share the same server via its
+- The standalone `llm-entity-extraction` repo (retired from the monorepo, DMR-079) can still share the same server via its
   `OPENROUTER_BASE_URL` seam.
 
 ## Related
