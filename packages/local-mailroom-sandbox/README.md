@@ -165,7 +165,6 @@ See [`docs/setting-up/docker-offline.md`](docs/setting-up/docker-offline.md).
 <div align="center">
 
 **[llm-mailroom](https://github.com/Exios66/llm-mailroom)** ·
-**[llm-entity-extraction](https://github.com/Exios66/llm-entity-extraction)** ·
 **[llm-dojo-scoring](https://github.com/Exios66/llm-dojo-scoring)** ·
 **[The-Mailroom](https://github.com/Exios66/The-Mailroom)**
 

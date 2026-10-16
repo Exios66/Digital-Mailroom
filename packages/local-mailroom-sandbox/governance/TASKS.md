@@ -3,8 +3,8 @@
 **Prefix: `SAND`** · Board rules: [`README.md`](README.md) · Cheat-sheet:
 [`PREFIX.md`](PREFIX.md)
 
-Cross-family work stays on llm-entity-extraction's MESSAGE_BOARD as
-**`DMR-*`**. This file is the **only** sandbox-local task board — do not
+Cross-family work stays on the Digital-Mailroom hub board
+(`governance/TASKS.md` at the monorepo root) as **`DMR-*`**. This file is the **only** sandbox-local task board — do not
 open `DMR-*` cards here.
 
 **Next ID: `SAND-057`**
