@@ -20,7 +20,61 @@ belongs to the standalone mailroom lineage that became `packages/llm-mailroom`
 and is recorded there, not here.
 
 ## [Unreleased]
+### Removed
+
+- **DMR-079 consolidation prune — the core monorepo is now 7 members**
+  (`llm-mailroom`, `llm-dojo-scoring`, `The-Mailroom`,
+  `local-mailroom-sandbox`, `mailroom-corpus-eda` + feeds
+  `Enron-Evaluation-Environment`, `claims-data-eda`). Removed:
+  `packages/llm-entity-extraction` (eval loop, 15.2 MB),
+  `packages/llm-mailroom-graph` (derived graphify site, 6.1 MB) and
+  `packages/agent-mailroom` (now on branch `feature/agent-mailroom`). The
+  standalone Exios66 repos remain; v0.8.0 is the last hub release containing
+  them. Workspace + `uv.lock` (drops `langchain`, `pdf2image`), sync map +
+  cursors (status 7/7), taxonomy parity (entity sorter surface removed),
+  The-Mailroom constellation registry (pruned + all graph sites), issue
+  templates, docs/wiki, and project personas (prompt-engineer rescoped to
+  llm-mailroom + dojo prompt surfaces) updated. `labels.json` keeps the
+  retired `domain/*` labels for historical issues.
+
+### Changed
+
+- **`llm-dojo-scoring` pin → `v0.22.0` (tagged + published 2026-10-16).** The
+  Phase-1 feeder import carried the 9 unreleased commits toward v0.22.0
+  (upstream branch `claude/cool-wozniak-o044u4`, `852b0527`); the tag was then
+  cut upstream (`a2862cec`) and imported as a release, repinning
+  `packages/llm-mailroom` `pyproject.toml` to `@v0.22.0`. v0.22.0 is a
+  breaking scoring release (strict `metric_id_for`, required emitter
+  provenance, `token_price_estimate` cost basis, archive scoring
+  `status`/`reason`); llm-mailroom's guard + parity tests pass against it, and
+  the workspace taxonomy `field_types` now matches the dojo
+  `DEFAULT_FIELD_TYPES` (`intent: label`), so the dojo-parity `xfail` is
+  retired. Vendor snapshots refreshed to the tag (`sync_vendor.py`); stale
+  `v0.21.0` / "pre-tag `852b052`" claims corrected across the llm-mailroom and
+  sandbox docs.
+
+## [0.8.0] - 2026-10-16
 ### Added
+
+- **DMR-079 pre-prune baseline — feeder import (upstream wins):** squash
+  subtree pulls of every standalone tip with independent progress, landed
+  monorepo-side only (no push upstream). `llm-dojo-scoring` `1c4a798e`
+  (52 commits, v0.21.0), `llm-mailroom` `a5bf7c8a` (207 commits, v0.8.0),
+  `local-mailroom-sandbox` `850e75b2` (105 commits, v0.3.0), `The-Mailroom`
+  `d5358650` (5 commits, v0.5.1); `mailroom-corpus-eda` re-baselined to
+  `c5053160` (already contained). 46 conflicting paths resolved to the
+  upstream side (human directive: standalone repos hold current progress).
+  `modal` deploy pin aligned to `1.6.1` in `llm-mailroom` + entity-extraction
+  (sandbox upstream moved to 1.6.1; the workspace lock was unsatisfiable);
+  `uv.lock` regenerated; sandbox `vendor/` refreshed. Workspace dojo also
+  carries the 9 unreleased v0.22.0 commits (upstream branch
+  `claude/cool-wozniak-o044u4`, `852b0527`) the sandbox vendor already
+  depends on. Post-import repairs: The-Mailroom #111 BERT panels re-wired
+  (lost to the upstream-side resolution) + ArchiveBrowser filter set to the
+  five live classes; llm-mailroom moved-doc links, notebook 00 restored,
+  dojo-parity xfail non-strict in the workspace; sandbox prompt pins
+  regenerated + modal 1.6.1 / `config/runs/sand032/` test pins. This release
+  is the rollback point before the DMR-079 consolidation prune.
 
 - **DMR-078: A100 cost-per-token evidence into `packages/local-mailroom-sandbox`:**
   per-leg run manifest builder (`scripts/build_a100_manifest.py` →
@@ -932,7 +986,8 @@ agent-mailroom v0.2.0, local-mailroom-sandbox v0.1.0.
 - Upstream drift reconciled across all packages; `sync status` 10/10 in sync
   (HUB-004, HUB-018); stale pins/counts swept (HUB-010/016/018).
 
-[Unreleased]: https://github.com/LLM-Mailroom-Services/Digital-Mailroom/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/LLM-Mailroom-Services/Digital-Mailroom/compare/v0.8.0...HEAD
+[0.7.0]: https://github.com/LLM-Mailroom-Services/Digital-Mailroom/compare/v0.7.0...v0.8.0
 [0.6.0]: https://github.com/LLM-Mailroom-Services/Digital-Mailroom/compare/v0.6.0...v0.7.0
 [0.5.0]: https://github.com/LLM-Mailroom-Services/Digital-Mailroom/compare/v0.5.0...v0.6.0
 [0.4.0]: https://github.com/LLM-Mailroom-Services/Digital-Mailroom/compare/v0.4.0...v0.5.0
@@ -942,3 +997,4 @@ agent-mailroom v0.2.0, local-mailroom-sandbox v0.1.0.
 [0.5.0]: https://github.com/LLM-Mailroom-Services/Digital-Mailroom/releases/tag/v0.5.0
 [0.6.0]: https://github.com/LLM-Mailroom-Services/Digital-Mailroom/releases/tag/v0.6.0
 [0.7.0]: https://github.com/LLM-Mailroom-Services/Digital-Mailroom/releases/tag/v0.7.0
+[0.8.0]: https://github.com/LLM-Mailroom-Services/Digital-Mailroom/releases/tag/v0.8.0

@@ -77,7 +77,7 @@ def test_wall_clock_cost_uses_the_run_gpu_rate():
 def _build_run(root, gpu):
     """A tiny, fully-synthetic correspondence run so run_report renders offline."""
     rid = "sand032-l0-baseline"
-    (root / "config" / "runs").mkdir(parents=True)
+    (root / "config" / "runs" / "sand032").mkdir(parents=True)
     spec = {
         "schema": "sandbox.run/v1", "run_id": rid, "task": "correspondence_specialist",
         "prompt": {"agents": {"correspondence_specialist": {"file": "correspondence_specialist_production"}}},
@@ -95,7 +95,7 @@ def _build_run(root, gpu):
                              "prewarm": True}},
         "job": {"mode": "endpoint", "concurrency": 8, "cost_cap_usd": 0.15, "max_wall_seconds": 1800},
     }
-    (root / "config" / "runs" / f"{rid}.yaml").write_text(yaml.safe_dump(spec))
+    (root / "config" / "runs" / "sand032" / f"{rid}.yaml").write_text(yaml.safe_dump(spec))
     run = root / "data" / "runtime" / "runs" / rid
     run.mkdir(parents=True)
     items = [
@@ -220,7 +220,7 @@ _Table views of both figures: **Per-document scores** and **Strata** below._
 
 ```bash
 modal profile activate exios66
-scripts/sand032/run_one.sh config/runs/sand032-l0-baseline.yaml deploy stop   # or: warm (reuse fleet)
+scripts/sand032/run_one.sh config/runs/sand032/sand032-l0-baseline.yaml deploy stop   # or: warm (reuse fleet)
 scripts/mailroom-tui score sand032-l0-baseline
 ```
 
@@ -228,7 +228,7 @@ scripts/mailroom-tui score sand032-l0-baseline
 
 | path | role |
 | --- | --- |
-| `config/runs/sand032-l0-baseline.yaml` | run spec |
+| `config/runs/sand032/sand032-l0-baseline.yaml` | run spec |
 | `reports/serving/sand032-l0-baseline.serving.json` | serving record (busy wall, tokens, p50/p95, run-span lower bound) |
 | `data/runtime/runs/sand032-l0-baseline/` | run store (lock, dataset, items, /metrics before/after) — gitignored |
 | `data/runtime/bt_experiments/sand032-l0-baseline/` | offline Braintrust-shaped rows — disposed after this report is committed |

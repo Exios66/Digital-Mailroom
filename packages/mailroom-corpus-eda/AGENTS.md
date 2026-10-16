@@ -146,9 +146,9 @@ git -C ../llm-mailroom checkout --force --detach FETCH_HEAD
 `pytest` is a dev extra and is absent from `requirements.txt`. Without the
 sibling pin, `test_mailroom_contract_fixture` and
 `test_expected_specialist_matches_live_taxonomy_yaml` cannot read
-`../llm-mailroom/src/config/taxonomy.yaml`. `llm-mailroom` `main` after
-`417d5a0814cb14f5c3834c063045c9a8c7801cfb` routes `merger_agreement` to
-`merger_agreement_specialist`; these tests expect `contracts_specialist`.
+`../llm-mailroom/src/config/taxonomy.yaml`. `llm-mailroom` routes `merger_agreement` to
+`merger_agreement_specialist` (registry tip `a5bf7c8a`); `SPECIALIST_BY_CLASS`
+and these tests match it.
 
 `run_all.py --phases P0` fetches the public
 `Lucius-Morningstar/mailroom-dataset` snapshot into gitignored `data/`
