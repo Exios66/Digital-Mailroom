@@ -20,6 +20,22 @@ belongs to the standalone mailroom lineage that became `packages/llm-mailroom`
 and is recorded there, not here.
 
 ## [Unreleased]
+### Removed
+
+- **DMR-079 consolidation prune — the core monorepo is now 7 members**
+  (`llm-mailroom`, `llm-dojo-scoring`, `The-Mailroom`,
+  `local-mailroom-sandbox`, `mailroom-corpus-eda` + feeds
+  `Enron-Evaluation-Environment`, `claims-data-eda`). Removed:
+  `packages/llm-entity-extraction` (eval loop, 15.2 MB),
+  `packages/llm-mailroom-graph` (derived graphify site, 6.1 MB) and
+  `packages/agent-mailroom` (now on branch `feature/agent-mailroom`). The
+  standalone Exios66 repos remain; v0.8.0 is the last hub release containing
+  them. Workspace + `uv.lock` (drops `langchain`, `pdf2image`), sync map +
+  cursors (status 7/7), taxonomy parity (entity sorter surface removed),
+  The-Mailroom constellation registry (pruned + all graph sites), issue
+  templates, docs/wiki, and project personas (prompt-engineer rescoped to
+  llm-mailroom + dojo prompt surfaces) updated. `labels.json` keeps the
+  retired `domain/*` labels for historical issues.
 
 ## [0.8.0] - 2026-10-16
 ### Added
