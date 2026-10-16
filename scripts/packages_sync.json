@@ -13,12 +13,6 @@
       "synced_sha": "d5358650e42d8e8843c215cde1eebb8c9acebbed",
       "url": "https://github.com/Exios66/The-Mailroom.git"
     },
-    "agent-mailroom": {
-      "branch": "main",
-      "synced_at": "2026-10-05T04:35:51Z",
-      "synced_sha": "e511c7738aa2dfcde1dd75f442fbd2fe32424d95",
-      "url": "https://github.com/Exios66/agent-mailroom.git"
-    },
     "claims-data-eda": {
       "branch": "main",
       "synced_at": "2026-09-16T22:07:38Z",
@@ -31,23 +25,11 @@
       "synced_sha": "1c4a798e0d375f347a7428c340bde93f50417e9c",
       "url": "https://github.com/Exios66/llm-dojo-scoring.git"
     },
-    "llm-entity-extraction": {
-      "branch": "main",
-      "synced_at": "2026-10-05T04:35:50Z",
-      "synced_sha": "775b0ed6ef31ea71a0c5a3899e99d902579674ba",
-      "url": "https://github.com/Exios66/llm-entity-extraction.git"
-    },
     "llm-mailroom": {
       "branch": "main",
       "synced_at": "2026-10-16T21:27:50Z",
       "synced_sha": "a5bf7c8a74f2cc183624f7f12cb3decfa1df34fd",
       "url": "https://github.com/Exios66/llm-mailroom.git"
-    },
-    "llm-mailroom-graph": {
-      "branch": "main",
-      "synced_at": "2026-09-16T22:08:02Z",
-      "synced_sha": "7f4baf3c34ad2b34fd94c5163a9b622c676d0ba9",
-      "url": "https://github.com/Exios66/llm-mailroom-graph.git"
     },
     "local-mailroom-sandbox": {
       "branch": "main",

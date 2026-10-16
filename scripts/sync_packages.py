@@ -142,12 +142,9 @@ JSON_MODE = False
 PACKAGES: dict[str, str] = {
     "Enron-Evaluation-Environment": "Enron-Evaluation-Environment",
     "The-Mailroom": "The-Mailroom",
-    "agent-mailroom": "agent-mailroom",
     "claims-data-eda": "claims-data-eda",
     "llm-dojo-scoring": "llm-dojo-scoring",
-    "llm-entity-extraction": "llm-entity-extraction",
     "llm-mailroom": "llm-mailroom",
-    "llm-mailroom-graph": "llm-mailroom-graph",
     "local-mailroom-sandbox": "local-mailroom-sandbox",
     "mailroom-corpus-eda": "Mailroom-Corpus-EDA",
 }

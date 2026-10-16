@@ -541,8 +541,8 @@ class TestResolutionLadder(SyncScriptTest):
 
 class TestSeverityAndDirty(SyncScriptTest):
     def test_j_multi_package_severity_law(self):
-        # second package (llm-mailroom-graph) stays in sync -> fast path
-        origin2 = self.upstreams / "llm-mailroom-graph.git"
+        # second package (claims-data-eda) stays in sync -> fast path
+        origin2 = self.upstreams / "claims-data-eda.git"
         src2 = self.tmp / "src2"
         git(self.tmp, "init", "--bare", "-b", "main", str(origin2), check=True)
         git(self.tmp, "clone", str(origin2), str(src2), check=True)
@@ -550,7 +550,7 @@ class TestSeverityAndDirty(SyncScriptTest):
         git(src2, "add", "-A", check=True)
         git(src2, "commit", "-m", "base2", check=True)
         git(src2, "push", "origin", "main", check=True)
-        git(self.mono, "subtree", "add", "--prefix=packages/llm-mailroom-graph",
+        git(self.mono, "subtree", "add", "--prefix=packages/claims-data-eda",
             str(origin2), "main", check=True)
         self.diverge()  # llm-dojo-scoring now conflicts
         res = self.run_script("pull", "--all", "--json", env_extra=self.origin_env)
@@ -561,19 +561,19 @@ class TestSeverityAndDirty(SyncScriptTest):
             rec = json.loads(line)
             recs[rec["package"]] = rec
         self.assertEqual(set(recs), {
-            "Enron-Evaluation-Environment", "The-Mailroom", "agent-mailroom",
-            "claims-data-eda", "llm-dojo-scoring", "llm-entity-extraction",
-            "llm-mailroom", "llm-mailroom-graph", "local-mailroom-sandbox",
+            "Enron-Evaluation-Environment", "The-Mailroom",
+            "claims-data-eda", "llm-dojo-scoring",
+            "llm-mailroom", "local-mailroom-sandbox",
             "mailroom-corpus-eda",
         })
         self.assertEqual(recs[PKG]["error_class"], "conflict")
         self.assertEqual(recs[PKG]["exit_code"], 3)
         self.assertFalse(recs[PKG]["cursor_updated"])
-        self.assertEqual(recs["llm-mailroom-graph"]["error_class"], "ok")
-        self.assertTrue(recs["llm-mailroom-graph"]["cursor_updated"])
-        self.assertEqual(recs["agent-mailroom"]["error_class"], "network")
+        self.assertEqual(recs["claims-data-eda"]["error_class"], "ok")
+        self.assertTrue(recs["claims-data-eda"]["cursor_updated"])
+        self.assertEqual(recs["llm-mailroom"]["error_class"], "network")
         # cursor advanced ONLY for the fast-path package
-        self.assertEqual(set(self.read_manifest().get("packages", {})), {"llm-mailroom-graph"})
+        self.assertEqual(set(self.read_manifest().get("packages", {})), {"claims-data-eda"})
 
     def test_k_allow_dirty_conflict_leaves_merge_in_place(self):
         self.diverge()
