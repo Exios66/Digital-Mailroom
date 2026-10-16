@@ -1,6 +1,6 @@
 """Hugging Face corpus pin for The-Mailroom eval / Langfuse dataset sync.
 
-``Lucius-Morningstar/docclass-merged`` (corrected GT revision) is the
+``Lucius-Morningstar/mailroom-dataset`` (v9.1, pinned revision) is the
 authoritative full corpus. Display still comes from Langfuse traces; this
 module only covers Hub GT / pilot intake so scripts hit one pinned revision
 via the datasets-server REST API (no ``datasets`` / ``huggingface_hub``
@@ -17,10 +17,15 @@ import urllib.request
 from typing import Any
 
 ORG = "Lucius-Morningstar"
-FULL_CORPUS_ID = f"{ORG}/docclass-merged"
+# Renamed 2026-09-02 (human directive): Hub repo mailroom-corpus
+# (formerly docclass-merged); old id serves a Hub redirect. The v9
+# successor (2026-09-12) is published as mailroom-dataset; mailroom-corpus
+# stays as the frozen v8 baseline.
+FULL_CORPUS_ID = f"{ORG}/mailroom-dataset"
 EXAMPLES_ID = f"{ORG}/docclass-pilot"
-# Corrected ground-truth tip (intent / subject_matter / keywords re-labels).
-FULL_CORPUS_REVISION = "1d4753578d91aae09033b359bc32dc1b431e4c20"
+# v9.1 (Hub tag v9.1 → ed7576b): mailroom-dataset GT refresh — 3,302-row
+# hardened ground_truth; supersedes the v9 GT-closure tip (46a4d3c2).
+FULL_CORPUS_REVISION = "v9.1"
 GT_CONFIG = "ground_truth"
 DEFAULT_CONFIG = "default"
 ROWS_API = "https://datasets-server.huggingface.co/rows"
@@ -58,12 +63,25 @@ def fetch_rows(
     revision: str | None = None,
     page_size: int = 100,
     max_rows: int | None = None,
+    offset: int = 0,
+    page_sleep: float = 0.0,
 ) -> list[dict[str, Any]]:
-    """Page the Hub datasets-server ``/rows`` API for one config/split."""
+    """Page the Hub datasets-server ``/rows`` API for one config/split.
+
+    ``offset`` starts paging at a row index within the split (used for
+    single-row / windowed fetches by the TUI corpus browser and the Pages
+    corpus catalog).  ``page_sleep`` paces requests between pages — the
+    unauthenticated Hub budget is small, so long exports should pass
+    something like 1.0.
+
+    ``revision`` is forwarded as a query parameter, but the datasets-server
+    ``/rows`` endpoint is documented against the default branch; treat the
+    pin as best-effort here and use the parquet/``resolve/<rev>`` path when
+    byte-exact pinned rows are required.
+    """
     ds = dataset or corpus_id()
     rev = revision if revision is not None else corpus_revision()
     out: list[dict[str, Any]] = []
-    offset = 0
     headers = _auth_headers()
     while True:
         length = page_size
@@ -84,12 +102,24 @@ def fetch_rows(
         url = ROWS_API + "?" + urllib.parse.urlencode(q)
         last: Exception | None = None
         page: dict[str, Any] | None = None
-        for attempt in range(3):
+        # 429 (rate limit) needs a much slower ladder than transient 5xx
+        # blips — the unauthenticated datasets-server budget is small.
+        for attempt in range(4):
             try:
                 req = urllib.request.Request(url, headers=headers)
                 with urllib.request.urlopen(req, timeout=60) as resp:
                     page = json.loads(resp.read().decode())
                 break
+            except urllib.error.HTTPError as exc:
+                last = exc
+                if exc.code == 429:
+                    time.sleep(5.0 * (2 ** attempt))  # 5s, 10s, 20s, 40s
+                elif 400 <= exc.code < 500:
+                    # 400/401/403/404/422 are answers, not blips — retrying
+                    # just burned ~20 s before the same error.
+                    break
+                else:
+                    time.sleep(2 * (attempt + 1))
             except Exception as exc:  # noqa: BLE001 — transient Hub blips
                 last = exc
                 time.sleep(2 * (attempt + 1))
@@ -102,6 +132,8 @@ def fetch_rows(
         if len(batch) < length:
             break
         offset += len(batch)
+        if page_sleep > 0:
+            time.sleep(page_sleep)
     return out
 
 

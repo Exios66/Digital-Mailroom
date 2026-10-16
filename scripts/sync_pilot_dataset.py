@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Mirror Lucius-Morningstar/docclass-merged INTO a Langfuse dataset.
+"""Mirror Lucius-Morningstar/mailroom-dataset INTO a Langfuse dataset.
 
-Default corpus is the **corrected full** ``docclass-merged`` Hub set (pinned
+Default corpus is the **corrected full** ``mailroom-dataset`` Hub set (pinned
 revision via ``MAILROOM_HF_REVISION`` / ``mailroom_ui.hf_corpus``). The smaller
 ``docclass-pilot`` examples pack remains available with ``--corpus pilot``.
 
@@ -46,9 +46,9 @@ from mailroom_ui.hf_corpus import (  # noqa: E402
 _CORPORA = {
     "merged": {
         "dataset": FULL_CORPUS_ID,
-        "langfuse": "docclass-merged",
+        "langfuse": "mailroom-dataset",
         "description": (
-            "Corrected full corpus mirrored from Lucius-Morningstar/docclass-merged "
+            "Corrected full corpus mirrored from Lucius-Morningstar/mailroom-dataset "
             "(configs: default + ground_truth)."
         ),
     },
@@ -75,7 +75,7 @@ def main() -> int:
         "--corpus",
         choices=sorted(_CORPORA),
         default="merged",
-        help="Hub corpus to mirror (default: merged = corrected full docclass-merged).",
+        help="Hub corpus to mirror (default: merged = corrected full mailroom-dataset).",
     )
     parser.add_argument("--dry-run", action="store_true", help="Count rows without writing.")
     parser.add_argument(
@@ -132,7 +132,7 @@ def main() -> int:
     client = Langfuse(
         public_key=os.environ["LANGFUSE_PUBLIC_KEY"],
         secret_key=os.environ["LANGFUSE_SECRET_KEY"],
-        host=os.environ.get("LANGFUSE_HOST", "https://us.cloud.langfuse.com"),
+        host=(os.environ.get("LANGFUSE_HOST") or os.environ.get("LANGFUSE_BASE_URL") or "https://us.cloud.langfuse.com"),
     )
     try:
         client.auth_check()
@@ -158,8 +158,13 @@ def main() -> int:
             sig = getattr(item, "id", None)
             if sig:
                 known_items[sig] = item
-    except Exception:
-        pass
+    except Exception as exc:
+        print(
+            f"WARNING: could not list existing dataset items ({str(exc)[:120]}) — "
+            "the upsert will re-create everything (idempotency scan lost); "
+            "duplicate items may appear",
+            file=sys.stderr,
+        )
 
     for row in default_rows:
         fn = row.get("filename")
@@ -200,7 +205,7 @@ def main() -> int:
         f"dataset '{lf_name}' ({dataset_obj.id}): "
         f"{created} items added, {skipped} already present"
     )
-    host = os.environ.get("LANGFUSE_HOST", "https://us.cloud.langfuse.com").rstrip("/")
+    host = (os.environ.get("LANGFUSE_HOST") or os.environ.get("LANGFUSE_BASE_URL") or "https://us.cloud.langfuse.com").rstrip("/")
     print(f"Dataset live at {host}/datasets/{lf_name}")
     client.shutdown()
     return 0

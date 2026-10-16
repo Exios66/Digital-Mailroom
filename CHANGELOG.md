@@ -6,6 +6,240 @@ All notable changes to The-Mailroom are documented here, following
 
 ## [Unreleased]
 
+### Added
+
+- **Phoenix source reads mailroom-reloaded runs.** `mailroom.document` roots
+  and `mailroom.node.{ingest,bert_primary,sort,extract,verify,boss,
+  human_review,report_catalog_archive}` spans map to the floor stations and
+  Langfuse observation types (`RELOADED_NODE_STAGES` /
+  `RELOADED_STATUS_STAGES` in `pipeline_schema.py`); the root's
+  `mailroom.status|doc_id|filename|run_id|doc_type` attributes populate the
+  trace input/output/session when no `input.value` / `output.value` is set
+  (explicit values win; nothing is fabricated). `parked` -> REVIEW siding;
+  repeated `sort` / `extract` spans fold into retry stages. Tests:
+  `make_reloaded_trace` + `tests/test_phoenix_source.py`.
+
+## [0.5.1] - 2026-09-28
+
+> Operator desk: one bin watcher + Docker production path (hub #117/#118)
+
+### Changed
+
+- **Operator desk: one bin watcher** (mailroom-issues#118, Option A). The
+  operator compose stack drops the `mailroom-observer` sidecar; the
+  visualizer runs the in-process observer (`MAILROOM_OBSERVER=1` default).
+  `MAILROOM_OPERATOR_INGEST_TOKEN` is now optional there — only a standalone
+  `mailroom-observer` CLI (bins on another host) needs it. The
+  `/v1/ops/events` endpoint and the CLI are unchanged; no other caller exists.
+- **Operator desk: Docker production path** (mailroom-issues#117). New
+  `operator_desk/Dockerfile` (build context: repo root) installs the
+  `[operator]` extra — the image previously lacked `watchdog`, so both
+  observers silently no-oped — and bakes the React desk (`ui/dist`, base
+  `/desk/`) from a Node build stage. nginx is the only published port
+  (`MAILROOM_HTTP_PORT`, default 80); the visualizer no longer publishes
+  8001; nginx waits for the visualizer's healthcheck; both restart
+  `unless-stopped`. The broken `--profile ui` sidecar is gone. The hosted
+  root `Dockerfile` (HF Spaces / Railway / Fly) is untouched.
+
+### Fixed
+
+- nginx forwarded `Host $host`, which drops a non-80 port, so the same-origin
+  write guard refused every operator POST when nginx ran on another port.
+  It now forwards `$http_host`, and `/ws` / `/ws/pipeline` also carry
+  `X-Real-IP` / `X-Forwarded-*`. Explicit `/desk` location, a 40 MB body cap
+  for inbox uploads, and a commented TLS server block.
+- `ui/Dockerfile` (dev-only image) served the SPA at `/` although it is
+  built for `/desk/`, and its nginx proxied nothing; it now serves `/desk/`
+  and proxies `/api` `/v1` `/ws`. `ui/.dockerignore` added, and the root
+  `.dockerignore` keeps `ui/node_modules` / `ui/dist` out of image contexts.
+- Removed the dead `operator_desk.mount.start_operator_observer` helper.
+
+- `scripts/publish_pages.sh --skip-export` wiped `docs/debug/build-info.json`
+  on `gh-pages`, so `--status` (and the main → gh-pages hook) reported
+  `UNKNOWN` forever. A data-reusing publish now carries the live file over
+  and stamps it with the current commit (`data_reused: true`), keeping the
+  snapshot's own provenance as `data_git_sha` / `data_generated_at`; the
+  local `--skip-export` stash also keeps `site/debug`.
+
+## [0.5.0] - 2026-09-28
+
+> Upstream resync to llm-mailroom 959bb0b + full audit fixes
+
+### Security
+
+- **Public binds fail closed.** Hosted edition or any non-loopback
+  `MAILROOM_HOST`: operator login is refused (503) while
+  `MAILROOM_OPERATOR_JWT_SECRET` is unset/default or the admin still has the
+  default password; forged default-secret tokens are rejected; tokens must
+  carry `exp`; roles are enforced (archive download/preview/verify and ops
+  events need reviewer+); login no longer leaks usernames via timing.
+- **Producer writes are protected.** `POST /api/review/resolve` and
+  `/api/inbox/enqueue` refuse cross-site browser Origins and, on public
+  binds, require a reviewer JWT — anyone on the internet could previously
+  approve/requeue reviews or upload files through the server's producer
+  token. Wildcard CORS is read-only. The pixel console and Observatory
+  prompt for an operator login on 401; the TUI reads
+  `MAILROOM_OPERATOR_TOKEN`. **Deploys that resolve reviews publicly must set
+  `MAILROOM_OPERATOR_JWT_SECRET` and a real `MAILROOM_OPERATOR_ADMIN_PASSWORD`.**
+- Archive rows can no longer resolve to the operator SQLite store; `/verify`
+  stops returning absolute paths; download headers are RFC 5987 (quotes /
+  non-latin-1 names); debug logs pseudonymise client IPs; client debug
+  reports capped at 64 KB; base64 uploads validated; oversize uploads refused
+  before buffering; ops events type/size checked.
+- XSS hardening: inspector verdict class whitelisted, terminal-site escaping
+  covers quotes and markdown/repo links are scheme-checked, Observatory
+  review causes escaped; `?api=` to a foreign host needs confirmation.
+- Operator compose requires real secrets and the ingest token.
+
+### Changed
+
+- **Upstream resync to llm-mailroom `959bb0bce152`** (package 0.7.1+,
+  llm-dojo-scoring v0.16.0, mailroom-dataset `v9.1`):
+  `[pipeline]` pin / `producer.MAILROOM_GIT_SHA`; the ModernBERT
+  `intake-ml-triage` span (INTAKE, span) on both SDK fixtures; the dedicated
+  `merger_agreement_specialist` with the `MergerAgreementExtraction` field
+  set; bundled `confidence.by_class` so per-class review floors apply without
+  `MAILROOM_TAXONOMY`; `prompt_registry` regenerated verbatim (all 18 agents:
+  sorter_v14, contracts_specialist_v33, merger / intake / gmail_triage /
+  relations / image_extractor added — every other prompt had drifted);
+  `seed_demo` mirrors the taxonomy model registry (openrouter/free,
+  glm-5.2:free, qwen3.7-flash, deepseek v4 flash/pro; the judge is qwen like
+  every agent; procedural report / catalog carry no LLM generation).
+- Poller **enrich-once**: parked/finished runs get one bounded full fetch
+  when first seen or changed (`MAILROOM_POLL_ENRICH_BUDGET`, default 10) —
+  `inflight` mode left them light forever ($0, no verdict, no causes).
+- `/api/traces/{id}` asks the live source first; the disk snapshot is the
+  outage fallback (flagged `stale`). The default cache dir is scoped per
+  source project; health flags `stale`/`degraded` when serving cache.
+- Metrics: nearest-rank p95; `avg_latency_s` / `p95_generation_latency_s`
+  are `null` (not 0) with no data.
+- Every secondary version string (FastAPI, `?v=` cache-busts, README badges,
+  `ui/package.json`) follows `pyproject.toml`; `scripts/release.py` bumps
+  them and `--check` fails on drift or repeated CHANGELOG headers.
+- Docs: container topology (visualizer, producer, ollama/llamafile, sandbox
+  Langfuse/Phoenix/vLLM) in deployment docs; operator-desk security notes.
+
+- Pin `Lucius-Morningstar/mailroom-dataset` default revision from
+  `46a4d3c2` (v9 GT-closure) to Hub tag `v9.1` (`ed7576b`).
+
+- **DMR-016: vendored docclass mirror resynced 32→74 keys.**
+  `mailroom_ui/docclass_prompts.py::DOCLASS_PROMPT_VERSIONS` regenerated
+  verbatim (byte-identical, order-preserving) from llm-entity-extraction
+  `src/prompts_docclass.py::DOCCLASS_PROMPT_VERSIONS` — the mirror had gone
+  stale at the KANBAN-090 era (32 keys) while the source registry grew to 74
+  (KANBAN-101/103 specialists, HUB-041 mailroom v8, DMR-015 reviewer v2 +
+  the 14-key `mailroom_prompts` lineage). Count pin in
+  `tests/test_prompts.py::test_docclass_registry_shape` bumped to match.
+  Defaults unchanged; `scripts/sync_prompts.py --docclass` pushes the
+  refreshed family to Langfuse when run.
+
+### Fixed
+
+- **Data core** — naive `datetime.min` sort fallbacks crashed any trace with a
+  start-less observation; re-run clustering split one run at any LLM call
+  over 60 s and let an earlier attempt's generations and judge scores leak
+  onto the latest run (now one cut on the root CHAIN / idle gap for spans,
+  generations and scores); list payload observation ids became fake spans;
+  NaN/inf scores 500'd JSON responses; real 0.0 confidences fell through;
+  non-numeric `attempt` aborted the whole floor; JSON-string span/trace io
+  was dropped; v4 `usageDetails` / `calculatedTotalCost` / prompt fields read;
+  light runs use trace-level cost; review causes honour the schema.
+- **Langfuse source** — TTL cache grew without bound; 429 slept the poll
+  thread then failed anyway (now a cool-down window); 429/timeouts surfaced
+  as "trace not found"; outages were cached as empty observations/scores;
+  per-trace pagination past 100; `list_traces` honours `limit`.
+- `MAILROOM_SOURCE=both` total outage showed an empty healthy floor.
+- Producer proxy: timeouts 504 and non-JSON bodies 502 (were bare 500s).
+- Numeric `MAILROOM_*` env knobs parse tolerantly (a blank line crashed
+  startup; `POLL_INTERVAL=0` hammered Langfuse).
+- WebSocket broadcast is concurrent with a timeout (one slow client stalled
+  the loop); initial snapshot sent before joining the broadcast set.
+- **Terminal site was broken at boot** (`MAILROOM_DATA` const never reached
+  `window`); detail snapshots use the exporter's safe ids; failed fetches
+  aren't cached forever; pixel/observatory links fixed.
+- Pixel console: `?api=` WebSocket URL was `wss//host` (missing colon); on
+  Pages it read `/pixel/data/` (never staged); a failed first health probe
+  left the page dead; OPEN/CLOSED flicker; transient outages switched to
+  static mode for good; the 30 s review refresh wiped reviewer input; replay
+  hijacked by live snapshots; revived envelopes stayed translucent; 6 h
+  metrics buckets off by one hour.
+- Observatory: debug ring never attached to `window` (every `dbg()` a
+  no-op); clicking a review form opened the inspector; health hiccups caused
+  duplicate polling; first-probe failure recovery; snapshot export
+  download could be cancelled.
+- Pages publisher: the root `index.html` 404'd its css/js (now a redirect to
+  `terminal/`); `--skip-export` published an empty `docs/data`; the snapshot
+  check result was swallowed.
+- **TUI REPL never ran a typed command** (the editor reset its buffer before
+  the loop read it); typed-ahead keys were stranded by buffered stdin; quit or
+  a crash left the shell without echo; Ctrl+C killed instead of cancelling;
+  arrow keys typed `[A`; polling froze typing; Rich markup in trace strings
+  crashed tables; bad `--page` crashed the REPL; `--x=v` swallowed the next
+  arg; corpus lookups walked the whole split; repo metadata retried 16 × 10 s
+  offline.
+- Scripts: `eval_pipeline` paging skipped/duplicated traces and read
+  categorical verdicts as indices; `run_production_pilot` could score an
+  older session; `seed_demo` deleted every `demo-*` trace (now only its own,
+  never prod-like envs without `--force`).
+- Operator containers: nginx `location /` looped into HTTP 500; two
+  observers double-emitted events; the observer checksummed half-written
+  archive files and dropped publish errors; ops queue depth ignored most
+  stages; taxonomy load errors are logged and numeric casts guarded.
+- Tests: monorepo-only manifest tests skip standalone; security fixtures
+  generate their passwords at runtime.
+- CHANGELOG: removed a stray empty `[0.2.0]` header.
+
+## [0.4.0] - 2026-09-04
+
+### Added
+
+- **mailroom-tui is now a typed-command REPL** (M6). A persistent
+  `mailroom@floor:~$` prompt over a rich live frame (status header +
+  scrollback + prompt) with a raw-key line editor (Tab completion, arrows =
+  history, Ctrl+L clear, Ctrl+C cancel), a background floor poller that
+  pushes AgentLab banners into the scrollback, and a `floor` live desk
+  (`q`/`quit` to leave). New commands: `help`/`man`, `clear`, `history`,
+  `date`, `echo`, `uname`, `neofetch`, `whoami`, `filter stage=…`, plus
+  the two new surfaces below. The codebase split into `tui/commands.py`
+  (registry + man pages), `tui/views.py` (renderers), `tui/corpus.py`
+  (Hub corpus client), `tui/repos.py` (constellation manifest);
+  `mailroom_console.py` re-exports every legacy renderer so existing
+  scripts keep working. Scripting flags unchanged (`--once --view`,
+  `--resolve`, `--source`) with `--view corpus|repos` added.
+
+- **Corpus browser (TUI + terminal site).** `corpus ls|show|search|stats`
+  over `Lucius-Morningstar/mailroom-corpus` through the canonical
+  `mailroom_ui/hf_corpus` ladder: slim listing (instant, windowed paging),
+  per-file live `doc_text` + ground-truth fetch, filename/class/subclass
+  search, and split/class stats. The Hub being unreachable is an explicit
+  closed state — never canned data.
+
+- **Constellation repo browser (TUI + terminal site).** `repos ls`,
+  `repos <name>`, `open <name>` over the full manifest — every package the
+  monorepo mirrors upstream (verified against `packages_sync.json` in the
+  contract tests), the three hub copies (`mailroom-dev`, `mailroom-hub`,
+  `LLM-Postal`), and the derived graph sites; live GitHub metadata
+  (description/stars/language) fail-soft + cached.
+
+- **Terminal GH Pages site** (`terminal/`, owlcot-family). A TTY-emulating
+  static page at `/terminal/` on the Pages snapshot: `ls`/`cat`/`cd`/
+  `whoami`/`mail` virtual filesystem (runs/, corpus/, repos/, topics/),
+  `floor`/`inspect`/`review`/`metrics`/`sessions` from the exported
+  snapshot, live Hub corpus commands, repos browsing, themes
+  (amber/green/cyan), CRT scanline toggle, opt-in keypress sound,
+  ghost-text Tab completion, 1.06s CRT-accurate blink cursor, animated
+  man-page help, command history + prefs in localStorage. Staged to
+  `docs/terminal/` by `publish_pages.sh` (pixel console stays the root);
+  `scripts/export_corpus_catalog.py` writes the slim `site/data/corpus.json`
+  (2,000 rows: filename/class/subclass/sha/split + row-index offsets for
+  on-demand doc_text fetches).
+
+- **`mailroom_ui/hf_corpus.py` robustness.** `fetch_rows` gains `offset`
+  (single-row/windowed fetches) and `page_sleep` (pacing); 429 rate limits
+  get a patient backoff ladder (5s→40s). The catalog export verified
+  end-to-end against the live Hub: 2,000 rows (1,792 train / 208 test),
+  classes 950/509/350/152/39, all shas + GT indices present.
+
 ### Changed
 
 - **Railway now uses Infrastructure as Code.** `railway.json` (Config as
@@ -543,8 +777,6 @@ All notable changes to The-Mailroom are documented here, following
 ### Changed
 
 - **README overhaul — governed-constellation edition:** root README rebuilt from 102 to 177 lines around the family story while keeping every operational byte (quick start, screens, demo seeding, requirements, config, layout, tests, releases). Added: a factual static badge row (`version 0.2.0`, `python 3.11+`, `data source: Langfuse only` — deliberately NO release/license/CI badges: no v0.2.0 tag/release exists yet and the repo carries neither a LICENSE file nor workflows); a **"The governed constellation"** section with an ASCII YOU-ARE-HERE diagram and an at-a-glance table covering all seven family repos (llm-mailroom upstream · llm-entity-extraction prompt loop + shared board · llm-dojo-scoring engine · Enron-Evaluation-Environment + claims-data-eda corpus feeds · atticus-investigation eval sibling · both graphify sites) linking llm-mailroom's canonical `docs/sister-repos.md`; a new **"The trace contract & the mirror duty"** section documenting the #1 maintenance rule (mirror span names / roster / doc classes / thresholds / judge scores in the same change window) with the visible-by-design breakage map, deferring to `AGENTS.md` as authority; an `[!IMPORTANT]` alert on the schema-cache restart gotcha; dividers between major parts; honest "No license published yet" close. Docs-only; suite unchanged.
-
-## [0.2.0] - 2026-08-23
 
 ## [0.2.0] - 2026-08-24
 

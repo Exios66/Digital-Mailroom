@@ -8,6 +8,7 @@ are read from there instead (the topology above is data-driven there too).
 
 from __future__ import annotations
 
+import logging
 import os
 import re
 from dataclasses import dataclass, field
@@ -15,14 +16,19 @@ from typing import Optional
 
 from .models import Phase, Stage
 
+_log = logging.getLogger(__name__)
+
 # Verb-first observation names (traced_node) plus LangGraph node names, so
 # a floor envelope never falls through to INBOX/unknown when the producer
 # records the underscored graph id instead of the display span.
 SPAN_STAGE_MAP: dict[str, Stage] = {
-    "ingest-document": Stage.INGEST,
-    "normalize-intake": Stage.INGEST,
-    "transcribe-pdf": Stage.INGEST,
-    "extract-image-text": Stage.INGEST,
+    "intake-document": Stage.INTAKE,
+    "normalize-intake": Stage.INTAKE,
+    # ModernBERT fast-path triage (llm-mailroom #85 M6a) — a SPAN inside
+    # intake_node, always emitted (fail-open: available=false when off).
+    "intake-ml-triage": Stage.INTAKE,
+    "transcribe-pdf": Stage.INTAKE,
+    "extract-image-text": Stage.INTAKE,
     "classify-document": Stage.CLASSIFY,
     "judge-verify": Stage.JUDGE_VERIFY,
     "arbitrate-verdict": Stage.ARBITER,
@@ -33,7 +39,7 @@ SPAN_STAGE_MAP: dict[str, Stage] = {
     "write-catalog": Stage.CATALOG,
     "archive-document": Stage.ARCHIVE,
     # LangGraph add_node ids (build_graph.py)
-    "ingest": Stage.INGEST,
+    "intake": Stage.INTAKE,
     "classify": Stage.CLASSIFY,
     "retry_classify": Stage.RETRY_CLASSIFY,
     "review_classify": Stage.RETRY_CLASSIFY,
@@ -48,6 +54,34 @@ SPAN_STAGE_MAP: dict[str, Stage] = {
     "archive": Stage.ARCHIVE,
 }
 
+# mailroom-reloaded (CrewAI-Flows pipeline) node spans: ``mailroom.node.<node>``
+# under a ``mailroom.document`` root, read through the Phoenix source. Its
+# retry loops (sort -> gate -> sort) surface as consecutive repeats, which
+# build_routing_path already folds into the retry stages. ``grade`` is
+# eval-only and the gates are span events, so neither maps to a station.
+RELOADED_NODE_PREFIX = "mailroom.node."
+RELOADED_ROOT_SPAN = "mailroom.document"
+RELOADED_NODE_STAGES: dict[str, Stage] = {
+    "ingest": Stage.INTAKE,
+    "bert_primary": Stage.INTAKE,
+    "sort": Stage.CLASSIFY,
+    "extract": Stage.EXTRACT,
+    "verify": Stage.JUDGE_VERIFY,  # judge, then arbiter, inside one node
+    "boss": Stage.BOSS,
+    "human_review": Stage.HUMAN_REVIEW,
+    "report_catalog_archive": Stage.ARCHIVE,
+}
+# Document ``mailroom.status`` -> trace output ``stage`` token.
+RELOADED_STATUS_STAGES: dict[str, str] = {
+    "processing": "processing",
+    "archived": "archived",
+    "failed": "failed",
+    "parked": "review",
+}
+SPAN_STAGE_MAP.update(
+    {f"{RELOADED_NODE_PREFIX}{k}": v for k, v in RELOADED_NODE_STAGES.items()}
+)
+
 # Langfuse observation types (llm-mailroom observability/tracing.py
 # NODE_OBSERVATION_TYPES). The data-model docs require the most specific
 # type: chain = one document run; agent = specialist orchestration;
@@ -55,8 +89,9 @@ SPAN_STAGE_MAP: dict[str, Stage] = {
 # result / LegalBench answer; span = remaining units of work.
 NODE_OBSERVATION_TYPES: dict[str, str] = {
     "document-pipeline": "chain",
-    "ingest-document": "span",
+    "intake-document": "span",
     "normalize-intake": "span",
+    "intake-ml-triage": "span",
     "extract-image-text": "retriever",
     "transcribe-pdf": "retriever",
     "classify-document": "agent",
@@ -70,6 +105,15 @@ NODE_OBSERVATION_TYPES: dict[str, str] = {
     "archive-document": "span",
     "pipeline-result": "generation",
     "answer-question": "generation",
+    RELOADED_ROOT_SPAN: "chain",
+    f"{RELOADED_NODE_PREFIX}ingest": "span",
+    f"{RELOADED_NODE_PREFIX}bert_primary": "span",
+    f"{RELOADED_NODE_PREFIX}sort": "agent",
+    f"{RELOADED_NODE_PREFIX}extract": "agent",
+    f"{RELOADED_NODE_PREFIX}verify": "evaluator",
+    f"{RELOADED_NODE_PREFIX}boss": "agent",
+    f"{RELOADED_NODE_PREFIX}human_review": "span",
+    f"{RELOADED_NODE_PREFIX}report_catalog_archive": "span",
 }
 
 # Graph node names (underscored) that can appear as observation names
@@ -81,6 +125,9 @@ _NODE_TYPE_ALIASES: dict[str, str] = {
     "extract": "agent",
     "retry_extract": "agent",
     "judge_verify": "evaluator",
+    "arbiter": "agent",
+    "boss_escalation": "agent",
+    "compile_report": "agent",
 }
 
 
@@ -100,7 +147,7 @@ def observation_type_for(name: str, default: str = "span") -> str:
 
 STAGE_PHASE: dict[Stage, Phase] = {
     Stage.INBOX: Phase.INTAKE_SORT,
-    Stage.INGEST: Phase.INTAKE_SORT,
+    Stage.INTAKE: Phase.INTAKE_SORT,
     Stage.CLASSIFY: Phase.INTAKE_SORT,
     Stage.RETRY_CLASSIFY: Phase.INTAKE_SORT,
     Stage.EXTRACT: Phase.EXTRACTION_ADJUDICATION,
@@ -120,7 +167,7 @@ STAGE_PHASE: dict[Stage, Phase] = {
 # Node traversal order used to order spans into a routing path (mirrors the
 # add_node wiring order in llm-mailroom graph/build_graph.py).
 NODE_ORDER: list[Stage] = [
-    Stage.INGEST,
+    Stage.INTAKE,
     Stage.CLASSIFY,
     Stage.RETRY_CLASSIFY,
     Stage.EXTRACT,
@@ -135,49 +182,50 @@ NODE_ORDER: list[Stage] = [
 ]
 
 # Agent display roster: key -> (label, role). Mirrors src/agents/ of
-# llm-mailroom (+ langchain_agents/sorter_agent.py for sorter/sorter_reviewer).
-# Retired specialists (court opinions / due diligence) stay off this roster;
-# the sorter emits `unknown` for those classes.
+# llm-mailroom @959bb0b (+ langchain_agents/sorter_agent.py for
+# sorter/sorter_reviewer). Every live class has its own specialist (1:1).
+# Retired specialists (court opinions / due diligence / compliance) are gone
+# upstream; the sorter emits `unknown` for those classes.
 AGENTS: dict[str, dict[str, str]] = {
     "sorter": {"label": "Sorter", "role": "classify"},
     "intake": {"label": "Intake", "role": "prepare"},
     "sorter_reviewer": {"label": "Sorter Reviewer", "role": "review-classify"},
     "contracts_specialist": {"label": "Contracts", "role": "extract"},
+    "merger_agreement_specialist": {"label": "Merger Agreements", "role": "extract"},
     "corporate_records_specialist": {"label": "Corporate", "role": "extract"},
     "correspondence_specialist": {"label": "Correspondence", "role": "extract"},
-    "compliance_specialist": {"label": "Compliance", "role": "extract"},
     "insurance_claims_specialist": {"label": "Insurance Claims", "role": "extract"},
     "arbiter": {"label": "Arbiter", "role": "adjudicate"},
     "boss": {"label": "Boss", "role": "adjudicate"},
-    # compile_report is procedural in llm-mailroom v0.6.0 (no get_llm).
+    # compile_report is procedural in llm-mailroom (no get_llm).
     "reporter": {"label": "Reporter", "role": "report"},
     "judge": {"label": "Judge", "role": "evaluate"},
-    "pdf_transcriber": {"label": "Transcriber", "role": "ingest"},
-    "image_extractor": {"label": "Image Extractor", "role": "ingest"},
+    "pdf_transcriber": {"label": "Transcriber", "role": "intake"},
+    "image_extractor": {"label": "Image Extractor", "role": "intake"},
 }
 
-# Live taxonomy classes that dispatch to a specialist (llm-mailroom v0.6.0 /
-# taxonomy.yaml doc_classes). ``merger_agreement`` is a live MAUD class (not
-# an extract alias of CUAD ``contract``). ``unknown`` is a routing token.
+# Live taxonomy classes that dispatch to a specialist (llm-mailroom @959bb0b
+# taxonomy.yaml doc_classes — the finalised five-class surface).
+# ``merger_agreement`` is a live MAUD class with its own specialist and
+# schema (not an extract alias of CUAD ``contract``). ``unknown`` is a
+# routing token.
 LIVE_DOC_TYPES: tuple[str, ...] = (
     "contract",
     "merger_agreement",
     "corporate_record",
     "correspondence",
-    "compliance_filing",
     "insurance_claim",
 )
-RETIRED_DOC_TYPES: tuple[str, ...] = ("court_opinion", "due_diligence")
+RETIRED_DOC_TYPES: tuple[str, ...] = ("court_opinion", "due_diligence", "compliance_filing")
 UNKNOWN_DOC_TYPE = "unknown"
 # Sorter / HF labels that extract through a live taxonomy specialist without
-# adding a new doc_class row. Empty as of llm-mailroom v0.6.0 — MAUD is live.
+# adding a new doc_class row. Empty — MAUD is a live class.
 EXTRACT_CLASS_ALIASES: dict[str, str] = {}
 
 DOC_CLASSES: dict[str, str] = {
     "contract": "Contract / Agreement",
     "corporate_record": "Corporate Record",
     "correspondence": "Correspondence",
-    "compliance_filing": "Compliance Filing",
     "insurance_claim": "Insurance Claim",
     "merger_agreement": "Merger Agreement",
     "unknown": "Unknown",
@@ -210,7 +258,9 @@ FAILURE_CLASS_LABELS: dict[str, str] = {
 }
 
 # Mirror of llm-mailroom schemas.documents EXTRACTION_SCHEMAS field names
-# (v0.6.0 pared checklists; REVIEW Complete rejects foreign specialist keys).
+# (@959bb0b pared checklists; REVIEW Complete rejects foreign specialist keys).
+# ContractExtraction keeps its nullable merger_*/maud_* leftovers so older
+# CUAD payloads still validate.
 _META_EXTRACT_KEYS = frozenset({"confidence", "reasoning", "mock_extraction"})
 EXTRACTION_FIELD_KEYS_BY_CLASS: dict[str, frozenset[str]] = {
     "contract": frozenset({
@@ -228,10 +278,6 @@ EXTRACTION_FIELD_KEYS_BY_CLASS: dict[str, frozenset[str]] = {
         "communication_date", "demand_amount", "action_items",
         "urgency", "intent", "subject_matter", "keywords", "confidence",
     }),
-    "compliance_filing": frozenset({
-        "filing_type", "regulatory_body", "filing_date", "due_date",
-        "entity_name", "key_requirements", "status", "reference_number",
-    }),
     "insurance_claim": frozenset({
         "claim_number", "policy_number", "insurer", "insured_party",
         "claim_type", "date_of_loss", "date_filed", "claimed_amount",
@@ -240,8 +286,13 @@ EXTRACTION_FIELD_KEYS_BY_CLASS: dict[str, frozenset[str]] = {
         "intent", "subject_matter", "keywords", "claim_checklist", "confidence",
     }),
 }
-# MAUD shares the ContractExtraction field map but is its own live class.
-EXTRACTION_FIELD_KEYS_BY_CLASS["merger_agreement"] = EXTRACTION_FIELD_KEYS_BY_CLASS["contract"]
+# MAUD: dedicated MergerAgreementExtraction (llm-mailroom #64) — no CUAD
+# family/clauses, adds effective_time + the shared intent/subject/keywords.
+EXTRACTION_FIELD_KEYS_BY_CLASS["merger_agreement"] = frozenset({
+    "document_name", "parties", "effective_date", "effective_time",
+    "governing_law", "merger_consideration", "maud_clauses",
+    "intent", "subject_matter", "keywords", "reasoning",
+})
 
 _ABORT_CLASS_RE = re.compile(r"run aborted \[([a-z_]+)\]", re.I)
 
@@ -301,14 +352,13 @@ def validate_operator_extraction(doc_type: str, extracted: dict) -> dict:
 
 SPECIALIST_BY_DOC_CLASS: dict[str, str] = {
     "contract": "contracts_specialist",
-    "merger_agreement": "contracts_specialist",
+    "merger_agreement": "merger_agreement_specialist",
     "corporate_record": "corporate_records_specialist",
     "correspondence": "correspondence_specialist",
-    "compliance_filing": "compliance_specialist",
     "insurance_claim": "insurance_claims_specialist",
 }
 
-# Hub subclass catalogs (llm-dojo-scoring mailroom.HUB_SUBCLASS_INVENTORIES
+# Hub subclass catalogs (llm-dojo-scoring v0.16.0 mailroom.HUB_SUBCLASS_INVENTORIES
 # + CUAD contract_subtype keys + MAUD consideration types).
 CONTRACT_SUBTYPE_KEYS: tuple[str, ...] = (
     "affiliate", "agency", "collaboration", "co_branding", "consulting",
@@ -325,17 +375,16 @@ DOC_SUBCLASS_BY_CLASS: dict[str, tuple[str, ...]] = {
         "mixed_cash_stock_election", "other",
     ),
     "corporate_record": (
-        "articles_of_incorporation", "bylaws", "powers_of_attorney",
-        "rights_instrument", "other",
+        "articles_of_incorporation", "board_resolution", "bylaws",
+        "charter_amendment", "indenture", "officer_certificate", "other",
+        "powers_of_attorney", "rights_instrument", "subsidiary_list",
     ),
     "correspondence": (
         "email", "letter", "memo", "notice", "demand", "attorney_demand",
         "press_release", "meeting_request",
     ),
-    "insurance_claim": ("pde", "inpatient", "outpatient", "carrier"),
-    "compliance_filing": (
-        "10-K", "10-Q", "8-K", "S-1", "DEF 14A", "13D", "13G",
-        "Form 4", "20-F", "6-K", "other",
+    "insurance_claim": (
+        "pde", "inpatient", "outpatient", "carrier", "property", "auto",
     ),
 }
 
@@ -347,7 +396,8 @@ _CANONICAL_SCORE_NAMES: dict[str, str] = {
     alias: canonical for canonical, alias in LANGFUSE_SCORE_NAME_ALIASES.items()
 }
 
-# Dedicated specialist-suite extras (llm-mailroom suite_scoring.py / dojo 0.9.0).
+# Dedicated specialist-suite extras (llm-mailroom suite_scoring.py;
+# names unchanged through llm-dojo-scoring v0.16.0).
 SUITE_EXTRA_SCORES: tuple[str, ...] = (
     "content_topic_accuracy",
     "content_topic_f1_macro",
@@ -390,11 +440,21 @@ def canonical_score_name(name: str) -> str:
     return _CANONICAL_SCORE_NAMES.get(name, name)
 
 
+# llm-mailroom taxonomy.yaml confidence.by_class (@959bb0b).
+DEFAULT_BY_CLASS: dict[str, dict[str, float]] = {
+    "contract": {"high": 0.98, "low": 0.90, "judge_band_high": 0.97},
+    "merger_agreement": {"high": 0.98, "low": 0.90, "judge_band_high": 0.97},
+    "insurance_claim": {"high": 0.98, "low": 0.90, "judge_band_high": 0.97},
+    "corporate_record": {"high": 0.96, "low": 0.86, "judge_band_high": 0.94},
+    "correspondence": {"high": 0.95, "low": 0.85, "judge_band_high": 0.92},
+}
+
+
 @dataclass
 class PipelineSchema:
     """Loaded once per process; configurable thresholds from taxonomy.yaml."""
 
-    # llm-mailroom v0.6.0 taxonomy.yaml global confidence defaults.
+    # llm-mailroom taxonomy.yaml global confidence defaults (@959bb0b).
     confidence_high: float = 0.97
     confidence_low: float = 0.88
     retry_max: int = 2
@@ -403,8 +463,12 @@ class PipelineSchema:
     arbiter_retry_max: int = 2
     judge_max_passes: int = 3
     doc_classes: dict[str, str] = field(default_factory=lambda: dict(DEFAULT_DOC_CLASSES))
-    # Per-class severity overrides (taxonomy confidence.by_class).
-    by_class: dict[str, dict[str, float]] = field(default_factory=dict)
+    # Per-class severity overrides (taxonomy confidence.by_class). The
+    # bundled mirror carries them too, so review floors are per-class even
+    # without MAILROOM_TAXONOMY.
+    by_class: dict[str, dict[str, float]] = field(
+        default_factory=lambda: {k: dict(v) for k, v in DEFAULT_BY_CLASS.items()}
+    )
 
     @classmethod
     def load(cls, taxonomy_path: Optional[str] = None) -> "PipelineSchema":
@@ -419,24 +483,48 @@ class PipelineSchema:
         try:
             with open(path, "r", encoding="utf-8") as f:
                 cfg = yaml.safe_load(f) or {}
-        except Exception:
+        except Exception as exc:
+            # A broken MAILROOM_TAXONOMY must be visible, not silently ignored.
+            _log.error("MAILROOM_TAXONOMY %s unreadable (%s) — using bundled mirror", path, exc)
+            return schema
+        if not isinstance(cfg, dict):
+            _log.error("MAILROOM_TAXONOMY %s is not a mapping — using bundled mirror", path)
             return schema
         conf = dict(cfg.get("confidence", {}) or {})
         by_class = conf.pop("by_class", None) or {}
-        schema.confidence_high = float(conf.get("high", schema.confidence_high))
-        schema.confidence_low = float(conf.get("low", schema.confidence_low))
-        schema.retry_max = int(conf.get("retry_max", schema.retry_max))
-        schema.conflict_threshold = float(conf.get("conflict_threshold", schema.conflict_threshold))
-        schema.judge_band_high = float(conf.get("judge_band_high", schema.judge_band_high))
-        schema.arbiter_retry_max = int(conf.get("arbiter_retry_max", schema.arbiter_retry_max))
-        schema.judge_max_passes = int(conf.get("judge_max_passes", schema.judge_max_passes))
+
+        def _num(key: str, current, cast):
+            raw = conf.get(key)
+            if raw is None:
+                return current
+            try:
+                return cast(raw)
+            except (TypeError, ValueError):
+                _log.error("MAILROOM_TAXONOMY confidence.%s=%r is not numeric — keeping %r",
+                           key, raw, current)
+                return current
+
+        schema.confidence_high = _num("high", schema.confidence_high, float)
+        schema.confidence_low = _num("low", schema.confidence_low, float)
+        schema.retry_max = _num("retry_max", schema.retry_max, int)
+        schema.conflict_threshold = _num("conflict_threshold", schema.conflict_threshold, float)
+        schema.judge_band_high = _num("judge_band_high", schema.judge_band_high, float)
+        schema.arbiter_retry_max = _num("arbiter_retry_max", schema.arbiter_retry_max, int)
+        schema.judge_max_passes = _num("judge_max_passes", schema.judge_max_passes, int)
         if isinstance(by_class, dict):
             parsed: dict[str, dict[str, float]] = {}
             for key, overrides in by_class.items():
-                if isinstance(overrides, dict):
-                    parsed[str(key)] = {
-                        str(k): float(v) for k, v in overrides.items() if v is not None
-                    }
+                if not isinstance(overrides, dict):
+                    continue
+                clean: dict[str, float] = {}
+                for k, v in overrides.items():
+                    if v is None:
+                        continue
+                    try:
+                        clean[str(k)] = float(v)
+                    except (TypeError, ValueError):
+                        _log.error("MAILROOM_TAXONOMY by_class.%s.%s=%r is not numeric", key, k, v)
+                parsed[str(key)] = clean
             schema.by_class = parsed
         classes = {}
         for dc in cfg.get("doc_classes", []) or []:

@@ -9,7 +9,15 @@ ROOT = Path(__file__).resolve().parent.parent
 # `scripts` package must not shadow this repo's `scripts/` directory.
 # mailroom_ui.producer imports pipeline.review_resolve from site-packages
 # (extra `[pipeline]`) or a temporary checkout path that is removed after load.
-sys.path[:] = [p for p in sys.path if "llm-mailroom" not in Path(p).as_posix()]
+# In the mailroom-hub monorepo the llm-mailroom path on sys.path IS the
+# workspace member (uv-managed editable install) — keep it so lazy imports in
+# pipeline.review_resolve (observability.*) resolve; ROOT at sys.path[0] still
+# protects `scripts/`. Standalone checkouts keep the full strip.
+_MONOREPO = (ROOT.parent / "llm-mailroom").is_dir() and (
+    (ROOT.parent.parent / "uv.lock").is_file() or (ROOT.parent / "uv.lock").is_file()
+)
+if not _MONOREPO:
+    sys.path[:] = [p for p in sys.path if "llm-mailroom" not in Path(p).as_posix()]
 sys.path.insert(0, str(ROOT))
 
 
@@ -24,5 +32,8 @@ def _isolate_operator_desk(tmp_path, monkeypatch):
     monkeypatch.setenv("MAILROOM_OPERATOR_AUTH", "1")
     monkeypatch.setenv("MAILROOM_OBSERVER", "0")
     monkeypatch.delenv("MAILROOM_OPERATOR_INGEST_TOKEN", raising=False)
+    # Local (loopback) bind by default; public-bind tests opt in explicitly.
+    monkeypatch.delenv("MAILROOM_EDITION", raising=False)
+    monkeypatch.delenv("MAILROOM_HOST", raising=False)
     monkeypatch.delenv("MAILROOM_UI_DIST", raising=False)
     monkeypatch.setenv("MAILROOM_TRACE_CACHE_DIR", str(tmp_path / "trace-cache"))

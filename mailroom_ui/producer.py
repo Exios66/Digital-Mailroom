@@ -7,9 +7,19 @@ checkout is available:
 
     pip install -e ".[pipeline]"
 
-Pin: ``git+https://github.com/Exios66/llm-mailroom.git@3cf9fb9`` (package
-version 0.6.0 — tag ``v0.6.0``, pared LLM load). Bump
+Pin: ``git+https://github.com/Exios66/llm-mailroom.git@959bb0bce152`` (main
+after tag ``v0.7.1``; package version still 0.7.1 — dedicated
+merger_agreement_specialist, ModernBERT intake-ml-triage span,
+llm-dojo-scoring v0.16.0, mailroom-dataset tag v9.1). The review_resolve /
+schemas.manifest contract is unchanged since v0.7.1.
+Bump
 ``MAILROOM_GIT_SHA`` and the extra together.
+
+In the mailroom-hub monorepo the workspace ``[pipeline]`` extra resolves
+``mailroom`` to ``packages/llm-mailroom`` (editable), so the direct import
+below wins; the sibling-checkout fallback also resolves to the same member
+(``ROOT.parent / "llm-mailroom"``). Standalone checkouts keep the old
+sibling/``MAILROOM_PIPELINE_ROOT`` behavior.
 
 Never import ``api.main`` (watcher / embeddings / graph warm-up at import
 time) or ``llm_dojo_scoring``.
@@ -24,11 +34,11 @@ import sys
 from pathlib import Path
 from typing import Any, Optional
 
-# v0.6.0 tag 3cf9fb9 — "Release v0.6.0: pared LLM load + streamlined pipeline"
-MAILROOM_GIT_SHA = "3cf9fb9"
+# main 959bb0bce152 (post-v0.7.1) — "Pin mailroom-dataset to Hub tag v9.1 (#66)"
+MAILROOM_GIT_SHA = "959bb0bce152"
 MAILROOM_GIT_URL = "https://github.com/Exios66/llm-mailroom.git"
 MAILROOM_DIST_NAME = "mailroom"
-MAILROOM_DIST_VERSION = "0.6.0"
+MAILROOM_DIST_VERSION = "0.7.1"
 MAILROOM_PEP508 = (
     f"{MAILROOM_DIST_NAME} @ git+{MAILROOM_GIT_URL}@{MAILROOM_GIT_SHA}"
 )

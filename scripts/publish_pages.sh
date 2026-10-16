@@ -6,11 +6,17 @@
 # branch", branch: gh-pages, folder: /docs) and never touches Actions.
 #
 # Site layout produced (under docs/ on the gh-pages branch):
-#   docs/index.html       SPA shell (relative asset paths)
-#   docs/static/{css,js}  pixel-engine assets
+#   docs/index.html       redirect → terminal/ (the TTY needs its own dir for
+#                         relative css/js + ../data/ paths)
+#   docs/terminal/        terminal site (terminal/) — the TTY
+#   docs/pixel/           pixel-art SPA console
+#   docs/pixel/static/{css,js}  pixel-engine assets
 #   docs/.nojekyll        disable Jekyll processing
 #   docs/data/*.json      snapshot exported from the trace source
 #                         (Langfuse / Phoenix / both) by export_snapshot.py
+#   docs/data/corpus.json slim catalog of Lucius-Morningstar/mailroom-dataset
+#                         (export_corpus_catalog.py) — backs the terminal
+#                         site's corpus ls/search/stats
 #   docs/debug/build-info.json  provenance for agents (git sha, counts)
 #
 # Anything else already on the branch root is left untouched; legacy root-
@@ -19,7 +25,14 @@
 # Usage:
 #   scripts/publish_pages.sh [--source langfuse|phoenix|both] [--since-hours N]
 #                            [--limit N] [--skip-export] [--allow-empty] [--dry-run]
+#
 # Env overrides: PAGES_BRANCH (default gh-pages), PAGES_REMOTE (default origin).
+#
+# ⚠ PAGES_REMOTE disambiguation (hub#61): this script defaults REMOTE=origin,
+# which in the Digital-Mailroom monorepo is the *hub* repo
+# (LLM-Mailroom-Services/Digital-Mailroom). The gh-pages branch is meant for
+# The-Mailroom's own repo (Exios66/The-Mailroom) — set
+# PAGES_REMOTE to that remote (or add it and pass its name) before publishing.
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
@@ -89,28 +102,87 @@ if [[ -n "$DIRTY" ]]; then
   echo "note: working tree has uncommitted changes; build-info records HEAD ${HEAD_SHA} anyway"
 fi
 
-echo "== staging site shell =="
+# --skip-export reuses the previous export. `rm -rf site` used to delete it
+# first, and the publish then replaced the live docs/data with nothing.
+STASH=""
+if [[ "$SKIP_EXPORT" -eq 1 && -d site/data ]]; then
+  STASH="$(mktemp -d)"
+  cp -R site/data "$STASH/data"
+  [[ -d site/debug ]] && cp -R site/debug "$STASH/debug"
+fi
+
+echo "== staging site shell (pixel console -> /pixel/) =="
 rm -rf site
-mkdir -p site/static
-cp -R web/css web/js site/static/
-cp web/index.html site/
+mkdir -p site/pixel/static
+cp -R web/css web/js site/pixel/static/
+cp web/index.html site/pixel/
 touch site/.nojekyll
+
+echo "== staging terminal site (docs/terminal/) =="
+cp -R terminal site/terminal
+touch site/terminal/.nojekyll
+
+echo "== root index.html -> redirect to terminal/ =="
+# A raw copy of terminal/index.html at the root 404s its css/js (relative
+# paths) and resolves ../data/ above the project path.
+cat > site/index.html <<'HTML'
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Mailroom</title>
+<meta http-equiv="refresh" content="0; url=terminal/">
+<link rel="canonical" href="terminal/">
+<script>location.replace("terminal/" + location.search + location.hash);</script>
+</head>
+<body style="background:#050709;color:#d8d4ce;font-family:monospace;padding:2rem">
+<p>The Mailroom → <a style="color:#67e8f9" href="terminal/">terminal</a> ·
+<a style="color:#67e8f9" href="pixel/">pixel console</a></p>
+</body>
+</html>
+HTML
+
+if [[ -n "$STASH" ]]; then
+  cp -R "$STASH/data" site/data
+  [[ -d "$STASH/debug" ]] && cp -R "$STASH/debug" site/debug
+  rm -rf "$STASH"
+fi
 
 if [[ "$SKIP_EXPORT" -ne 1 ]]; then
   echo "== exporting snapshot (source=${SOURCE} since=${SINCE_HOURS}h limit=${LIMIT}) =="
   python scripts/export_snapshot.py \
     --source "$SOURCE" --out site/data \
     --since-hours "$SINCE_HOURS" --limit "$LIMIT"
+
+  echo "== exporting corpus catalog (mailroom-dataset slim rows) =="
+  python scripts/export_corpus_catalog.py --out site/data
 else
   echo "== skipping export (--skip-export): reusing existing site/data =="
 fi
 
-echo "== verifying snapshot =="
-python scripts/export_snapshot.py --check --out site/data
+# --skip-export with no local export: keep whatever data/ is already live on
+# the branch (restored at publish time) instead of blanking it.
+KEEP_REMOTE_DATA=0
+if [[ ! -f site/data/traces.json ]]; then
+  if [[ "$SKIP_EXPORT" -eq 1 ]]; then
+    echo "== no local site/data: the live docs/data on $BRANCH will be kept =="
+    KEEP_REMOTE_DATA=1
+  elif [[ "$ALLOW_EMPTY" -ne 1 ]]; then
+    echo "REFUSING to publish: the export wrote no site/data/traces.json." >&2
+    exit 1
+  fi
+fi
+
+TRACE_COUNT=1
+if [[ "$KEEP_REMOTE_DATA" -eq 0 && -f site/data/traces.json ]]; then
+  echo "== verifying snapshot =="
+  python scripts/export_snapshot.py --check --out site/data
+  TRACE_COUNT=$(python3 -c "import json;print(json.load(open('site/data/traces.json'))['count'])")
+fi
 
 # Guard: an empty export usually means unreachable/misconfigured source, not
 # "no runs". Never let it silently blank a populated live site.
-TRACE_COUNT=$(python3 -c "import json;print(json.load(open('site/data/traces.json'))['count'])")
 if [[ "$TRACE_COUNT" -eq 0 && "$ALLOW_EMPTY" -ne 1 ]]; then
   echo "" >&2
   echo "REFUSING to publish: the export contains 0 runs." >&2
@@ -146,9 +218,44 @@ fi
 for legacy in index.html .nojekyll static data debug .env .DS_Store mailroom_ui server site tests tui web scripts docs.wiki; do
   rm -rf "$CLONE/$legacy"
 done
+if [[ "$KEEP_REMOTE_DATA" -eq 1 && -d "$CLONE/docs/data" ]]; then
+  mv "$CLONE/docs/data" "$TMP/live-data"
+  if [[ -f "$CLONE/docs/debug/build-info.json" ]]; then
+    cp "$CLONE/docs/debug/build-info.json" "$TMP/live-build-info.json"
+  fi
+fi
 rm -rf "$CLONE/docs"
 mkdir -p "$CLONE/docs"
 rsync -a --exclude '.git' site/ "$CLONE/docs/"
+if [[ -d "$TMP/live-data" ]]; then
+  mv "$TMP/live-data" "$CLONE/docs/data"
+  if [[ -f "$TMP/live-build-info.json" && ! -f "$CLONE/docs/debug/build-info.json" ]]; then
+    mkdir -p "$CLONE/docs/debug"
+    cp "$TMP/live-build-info.json" "$CLONE/docs/debug/build-info.json"
+  fi
+fi
+
+# --skip-export republishes the site code over a reused snapshot: stamp
+# build-info with this commit (so --status reports IN SYNC) while keeping
+# the snapshot's own provenance. Wiping docs/ used to drop the file, and
+# --status then reported UNKNOWN forever.
+if [[ "$SKIP_EXPORT" -eq 1 ]]; then
+  mkdir -p "$CLONE/docs/debug"
+  python3 - "$CLONE/docs/debug/build-info.json" "$HEAD_SHA" <<'PY'
+import json, sys
+from datetime import datetime, timezone
+path, sha = sys.argv[1], sys.argv[2]
+try:
+    info = json.load(open(path))
+except (OSError, ValueError):
+    info = {}
+if info.get("git_sha") not in (None, sha):
+    info.setdefault("data_git_sha", info["git_sha"])
+    info.setdefault("data_generated_at", info.get("generated_at"))
+info.update(git_sha=sha, generated_at=datetime.now(timezone.utc).isoformat(), data_reused=True)
+json.dump(info, open(path, "w"), indent=2)
+PY
+fi
 
 # Final guard: never push secrets or env files to a public-serving branch.
 if find "$CLONE" -name ".env" -o -name "*.env" | grep -q .; then

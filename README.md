@@ -1,22 +1,29 @@
 # The-Mailroom
 
-![version](https://img.shields.io/badge/version-0.3.0-blue)
-[![release](https://img.shields.io/badge/release-v0.3.0-blue)](https://github.com/Exios66/The-Mailroom/releases/tag/v0.3.0)
+![version](https://img.shields.io/badge/version-0.5.1-blue)
+[![release](https://img.shields.io/badge/release-v0.5.1-blue)](https://github.com/Exios66/The-Mailroom/releases/tag/v0.5.1)
 ![python](https://img.shields.io/badge/python-3.11%2B-blue)
 ![data source](https://img.shields.io/badge/data%20source-Langfuse%20only-6C5CE7)
 
 **Pixel-art visual engine for the [`llm-mailroom`](https://github.com/Exios66/llm-mailroom)
 multi-agent legal-document pipeline.** The Mailroom renders every pipeline run as an
 animated conveyor of document envelopes — sorter, specialist bays, the boss's desk,
-the reporter, the archive — driven entirely by **Langfuse traces**. 
+the reporter, the archive — driven entirely by **Langfuse traces**.
 
-Three live surfaces share one display API (`/api/*` + `/ws`):
+Four surfaces share one display API (`/api/*` + `/ws`):
 
-| Surface | Command | URL |
-|---|---|---|
-| Pixel-art console | `mailroom-web` | `http://127.0.0.1:8001/` |
-| Hosted Observatory | `mailroom-hosted` (also `/live` on the same server) | `http://127.0.0.1:8001/live` |
-| TUI | `mailroom-tui` | terminal (`MAILROOM_API_URL`) |
+| Surface | Command / URL | Notes |
+| --- | --- | --- |
+| Pixel-art console | `mailroom-web` → `http://127.0.0.1:8001/` | the CRT conveyor floor |
+| Hosted Observatory | `mailroom-hosted` (also `/live` on the same server) | public operations desk |
+| TUI | `mailroom-tui` | typed-command REPL (`MAILROOM_API_URL`) |
+| Terminal site | `…/terminal/` on GH Pages | owlcot-style TTY: `ls`/`cat`/`cd`, `corpus ls | show`,`repos` |
+
+The terminal site and the TUI both add a **dataset viewer** (`corpus …`
+commands over `Lucius-Morningstar/mailroom-dataset` — slim windowed
+listing, live per-row `doc_text` + ground truth) and a **constellation
+repo browser** (`repos …` — every mirror package plus the hub copies and
+derived graph sites).
 
 Agent skills (Langfuse / Phoenix / Braintrust / Ollama / Modal / Hugging Face
 plus pixel, Observatory, live floor, schema sync, Pages, TUI, operator desk):
@@ -44,10 +51,10 @@ board, one discussion log, and one trace contract:
 ```
 
 | Repository | Role | Relationship to The-Mailroom |
-|---|---|---|
-| [llm-mailroom](https://github.com/Exios66/llm-mailroom) | LangGraph state machine processing legal documents through specialist LLM agents (classify → extract → report → archive); pin `@3cf9fb9` / **v0.6.0** (package `mailroom` 0.6.0) | **Upstream** — its Langfuse project is this visualizer's sole data source; optional `pip install -e ".[pipeline]"` imports `pipeline.review_resolve` |
+| --- | --- | --- |
+| [llm-mailroom](https://github.com/Exios66/llm-mailroom) | LangGraph state machine processing legal documents through specialist LLM agents (classify → extract → report → archive); pin `@959bb0bce152` / **0.7.1+** (main after v0.7.1) (package `mailroom` 0.7.1) | **Upstream** — its Langfuse project is this visualizer's sole data source; optional `pip install -e ".[pipeline]"` imports `pipeline.review_resolve` |
 | [llm-entity-extraction](https://github.com/Exios66/llm-entity-extraction) | Prompt-experiment loop (prompt versions × models, paired-bootstrap ablations) | Breeds the pipeline's sorter/specialist prompts; hosts the shared kanban board + governance log for the whole chain |
-| [llm-dojo-scoring](https://github.com/Exios66/llm-dojo-scoring) | Deterministic, field-type-aware scoring engine (`@v0.11.0`) | Upstream governed dependency of both pipeline repos |
+| [llm-dojo-scoring](https://github.com/Exios66/llm-dojo-scoring) | Deterministic, field-type-aware scoring engine (`@v0.16.0`) | Upstream governed dependency of both pipeline repos |
 | [Enron-Evaluation-Environment](https://github.com/Exios66/Enron-Evaluation-Environment) | EDA + pipeline-ready correspondence dataset (CMU Enron corpus) | Corpus feed for the pipeline's `correspondence` doc class |
 | [claims-data-eda](https://github.com/Exios66/claims-data-eda) | Insurance-claims candidate-corpus EDA (CMS DE-SynPUF direction) | Candidate corpus feed for the `insurance_claim` doc class |
 | [atticus-investigation](https://github.com/Exios66/atticus-investigation) | LegalBench classification prompt-engineering pipeline | Eval sibling — same methodology family, LegalBench focus |
@@ -61,15 +68,15 @@ Full relationship map: [`llm-mailroom/docs/sister-repos.md`](https://github.com/
 
 ```bash
 pip install -e ".[dev]"
-pip install -e ".[pipeline]"  # optional: import llm-mailroom @ 3cf9fb9 (v0.6.0)
+pip install -e ".[pipeline]"  # optional: import llm-mailroom @ 959bb0bce152 (0.7.1+, main after v0.7.1)
 cp .env.example .env      # add LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY
 mailroom-web              # → http://127.0.0.1:8001  (pixel-art console)
                           #    Observatory is also at /live on the same server
 mailroom-hosted           # → public Observatory on 0.0.0.0 (container-ready)
-mailroom-tui              # AgentLab-style live console (same data, in a terminal)
+mailroom-tui              # typed-command REPL (floor/corpus/repos/inspect)
 pip install -e ".[operator]"  # optional: operator desk (auth / archive / observer)
 pip install -e ".[ui]"        # marker only; React desk still needs Node
-mailroom-observer         # bin watcher (or MAILROOM_OBSERVER=1 on mailroom-web)
+mailroom-observer         # standalone bin watcher — or MAILROOM_OBSERVER=1 on mailroom-web (never both)
 # optional React desk: cd ui && npm install && npm run build  →  /desk
 ```
 
@@ -125,10 +132,17 @@ Langfuse remains the sole display source. The full gallery, including the
 PR screen recording, lives in the **[demos notebook](docs/demos/The-Mailroom-Demos.ipynb)**
 and [`docs/demos.md`](docs/demos.md) (wiki twin: [`Demos`](wiki/Demos.md)).
 
+> **Media note:** the recorded videos, posters, and notebook are heavy
+> assets that are pruned from this checkout (`docs/demos/` and
+> `docs/screenshots/` do not exist locally). They live upstream in the
+> `LLM-Mailroom-Services/Digital-Mailroom` repo at
+> `packages/The-Mailroom/docs/demos/` and `packages/The-Mailroom/docs/screenshots/`
+> (raw URLs on github.com); open the files there to play them.
+
 **Hugging Face Space — live Observatory** (~102s) — public Docker Space
 after #30 (classification cards, headline strip, inbox setup hint, Export
 snapshot, then Review / History / Matters / Metrics / Debug). Live:
-https://lucius-morningstar-mailroom-observatory.hf.space/
+<https://lucius-morningstar-mailroom-observatory.hf.space/>
 [hf-space-observatory-live-walkthrough.mp4](docs/demos/hf-space-observatory-live-walkthrough.mp4)
 
 [![HF Space Observatory Pipeline](docs/demos/hf-space-observatory-poster.png)](docs/demos/hf-space-observatory-live-walkthrough.mp4)
@@ -171,7 +185,7 @@ Open a section below to expand the stills.
 <summary>Pixel-art console (<code>mailroom-web</code>)</summary>
 
 | | |
-|---|---|
+| --- | --- |
 | ![The Mailroom floor — conveyor, stations, envelopes](docs/screenshots/floor.png) |
 | **FLOOR** — seven stations, per-doc-type envelope tints, review siding and failed bin. Click an envelope to inspect. |
 | ![Pilot run — four envelopes in motion](docs/screenshots/pilot-floor.png) |
@@ -195,7 +209,7 @@ Open a section below to expand the stills.
 <summary>Hosted Observatory (<code>/live</code>, <code>mailroom-hosted</code>)</summary>
 
 | | |
-|---|---|
+| --- | --- |
 | ![Observatory pipeline trays](docs/screenshots/observatory-pipeline.png) |
 | **Pipeline** — live trays including INBOX hopper, Sorter · Extract · Judge · Boss · Report · Archive · Review · Completed. |
 | ![Observatory review queue](docs/screenshots/observatory-review.png) |
@@ -215,7 +229,7 @@ Open a section below to expand the stills.
 <summary>TUI (<code>mailroom-tui</code>)</summary>
 
 | | |
-|---|---|
+| --- | --- |
 | ![TUI floor table and live log](docs/screenshots/tui-console.png) |
 | **Floor** (`mailroom-tui --once`) — per-doc table, verdicts, station banners, live log. |
 | ![TUI review siding](docs/screenshots/tui-review.png) |
@@ -263,7 +277,7 @@ envelopes are opt-in (`?demo=1`) and only when the trace source is down.
 - The sister pipeline repo `../llm-mailroom` (optional — `MAILROOM_TAXONOMY`
   live override, production-pilot scripts, or `mailroom_ui/producer.py`
   checkout import). Prefer `pip install -e ".[pipeline]"` to pin dist
-  `mailroom` @ `3cf9fb9` (v0.6.0) when you want to import `pipeline.review_resolve`.
+  `mailroom` @ `959bb0bce152` (0.7.1+, main after v0.7.1) when you want to import `pipeline.review_resolve`.
 - `arize-phoenix-client` (optional — only for the Phoenix trace source)
 
 </details>
@@ -408,6 +422,15 @@ adds `MAILROOM_OPERATOR_*` (JWT, admin seed, ingest token) plus
 (`langfuse|phoenix|both`), `PHOENIX_ENDPOINT` / `PHOENIX_API_KEY` /
 `MAILROOM_PHOENIX_PROJECT`, `MAILROOM_CORS_ORIGINS`, and `MAILROOM_DEBUG`.
 
+> [!WARNING]
+> **Public deploys fail closed (0.5.0).** On the hosted edition or any
+> non-loopback `MAILROOM_HOST`, review resolve and inbox upload need an
+> operator login (reviewer+), and login is refused until
+> `MAILROOM_OPERATOR_JWT_SECRET` is set and the admin password is rotated
+> away from `changeme`. Read-only display is unaffected. Cross-origin browser
+> writes need the origin listed in `MAILROOM_CORS_ORIGINS`; the TUI sends
+> `MAILROOM_OPERATOR_TOKEN`. See `docs/operator-desk.md`.
+
 > [!IMPORTANT]
 > `pipeline_schema.py` is cached at process level — editing `taxonomy.yaml`
 > (or pointing `MAILROOM_TAXONOMY` at the pipeline's copy) requires a server
@@ -456,7 +479,7 @@ tui/           rich console — the pipeline in a terminal (mailroom-tui)
 scripts/       seed_demo (demo runs INTO Langfuse) · demo_pilot_run
                (staggered floor recording) · run_production_pilot
                (live Qwen 3.7-Flash HF subset) · eval_pipeline
-               (Langfuse traces vs docclass-merged GT) · export_snapshot (Pages
+               (Langfuse traces vs mailroom-dataset GT) · export_snapshot (Pages
                data) · publish_pages (gh-pages push, no Actions) · release
                · render_tui_shots (README TUI SVGs)
 docs/ + wiki/  mirrored documentation (wiki/sync-wiki.sh publishes the wiki)

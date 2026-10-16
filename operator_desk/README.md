@@ -1,49 +1,52 @@
-# Operator desk (`operator_desk/`)
+<div align="center">
 
-Dedicated submodule for operator **auth**, **archive file access**, **ops
-snapshots**, and the **bin observer**. It is not a document-display source —
-pixel / Observatory / TUI still read Langfuse only.
+# 🖥️ Operator Desk
 
-## Routes (mounted on `mailroom-web`)
+**Production Docker stack for the Mailroom Operator Desk.**
 
-| Method | Path | Notes |
-| --- | --- | --- |
-| POST | `/v1/auth/login` | JWT (`admin` / `changeme` until you set `MAILROOM_OPERATOR_ADMIN_PASSWORD`) |
-| GET | `/v1/auth/me` | Bearer profile |
-| POST | `/v1/auth/logout` | Client discards the token |
-| GET | `/v1/archive/list` | Local `archive_index` only — never a fabricated catalog |
-| GET | `/v1/archive/{doc_id}/download\|preview\|verify` | Files under `MAILROOM_BASE_DIR` |
-| GET | `/v1/ops/health` | Liveness (no auth) |
-| GET | `/v1/ops/status\|throughput\|distribution` | Derived from Langfuse `PipelineRun`s |
-| POST | `/v1/ops/events` | Standalone observer ingest |
-| WS | `/ws/pipeline` | Bin-move events (`?token=`) |
+</div>
 
-Display `/api/*` and floor `/ws` stay unauthenticated.
+---
 
-## Commands
+## Structure
+
+| Path | Contents |
+| :--- | :--- |
+| [`Dockerfile`](Dockerfile) | Visualizer + `[operator]` extra + baked React `/desk` (build context: repo root) |
+| [`docker-compose.yml`](docker-compose.yml) | `mailroom` (visualizer, in-process bin watcher) + `nginx` (the only published port) |
+| [`nginx/nginx.conf`](nginx/nginx.conf) | Reverse proxy for `/`, `/live`, `/desk`, `/api`, `/v1`, `/ws`, `/ws/pipeline` |
+
+## Running
 
 ```bash
-pip install -e ".[dev]"          # includes bcrypt / PyJWT / watchdog
-pip install -e ".[operator]"     # + PyMuPDF for PDF preview
-scripts/setup_operator.sh        # bins + migrate
-mailroom-web                     # mounts the desk
-MAILROOM_OBSERVER=1 mailroom-web # in-process bin watcher (preferred)
-mailroom-observer                # standalone watcher → POST /v1/ops/events
-python -m operator_desk          # migrate only
+cd operator_desk
+export MAILROOM_OPERATOR_JWT_SECRET="$(openssl rand -hex 32)"
+export MAILROOM_OPERATOR_ADMIN_PASSWORD='<strong-password>'
+docker compose up --build          # → http://localhost/desk
 ```
 
-Compose (visualizer + observer + nginx, no local Langfuse). React desk is
-an **opt-in profile** after `cd ui && npm install && npm run build`:
+Compose refuses to start without both secrets (the stack binds `0.0.0.0`,
+so the desk fails closed on local-dev defaults). `MAILROOM_HTTP_PORT` moves
+nginx off port 80. Langfuse keys and `MAILROOM_PIPELINE_URL` / `_TOKEN` come
+from the environment or `.env`.
 
-```bash
-docker compose -f operator_desk/docker-compose.yml up --build
-docker compose -f operator_desk/docker-compose.yml --profile ui up --build
-```
+## One watcher
 
-Or serve the built SPA from this process at `/desk` when `ui/dist` exists.
+The visualizer runs the in-process bin observer (`MAILROOM_OBSERVER=1`) and
+broadcasts moves on `/ws/pipeline`. There is no observer sidecar — running
+both double-emitted every event (mailroom-issues#118). The standalone
+`mailroom-observer` CLI (POST `/v1/ops/events`, needs
+`MAILROOM_OPERATOR_INGEST_TOKEN`) is for bins on another host; set
+`MAILROOM_OBSERVER=0` on the visualizer if you use it.
 
-## Knobs
+## Not covered here
 
-See `.env.example` (`MAILROOM_OPERATOR_*`, `MAILROOM_BASE_DIR`, `MAILROOM_OBSERVER`).
-`JWT_SECRET` is accepted as an alias of `MAILROOM_OPERATOR_JWT_SECRET`. Do not
-reuse `MAILROOM_PIPELINE_TOKEN` as the JWT secret.
+- TLS: see the commented `listen 443` block in `nginx/nginx.conf`, or put a
+  TLS proxy in front (forward `X-Forwarded-Proto`).
+- The hosted Observatory image is the root `Dockerfile` (HF Spaces /
+  Railway / Fly) and is unaffected by this stack.
+
+## Related
+
+- `ui/` — React operator desk source (`ui/Dockerfile` is a dev-only image)
+- `docs/operator-desk.md` — auth, roles, endpoints

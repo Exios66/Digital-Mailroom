@@ -9,7 +9,7 @@
 
 The-Mailroom renders every run of the `llm-mailroom` multi-agent
 legal-document pipeline from its Langfuse traces (pixel-art console, hosted
-Observatory, and TUI).
+Observatory, TUI REPL, and the GH Pages terminal site).
 **Langfuse is the sole source of truth**: no display value is ever fabricated
 or served from local canned data. The repo is read-only against Langfuse
 (project-scoped API keys, backend proxies everything — the browser never holds
@@ -24,17 +24,34 @@ keys).
 │ mailroom_ui/  langfuse_source.py ← adapter (trace/observations/scores/     │
 │               trace_interpreter.py ← sessions via SDK)                    │
 │               pipeline_schema.py ← topology mirror (taxonomy.yaml)        │
+│               hf_corpus.py ← Hub datasets-server ladder (corpus reads)    │
 │               metrics.py · models.py                                       │
 │ server/  FastAPI → /api/* + /ws → serves web/ (console) and hosted/ (/live)│
 │          + operator_desk mount (/v1/auth|/archive|/ops, /ws/pipeline)     │
 │ web/     pixel-art SPA: Floor (conveyor, 7 stations incl. JUDGE) ·        │
 │          Inspector · Sessions · History · Metrics · Review · Console      │
 │ hosted/  Observatory — public modern accessible desk (live + replay)      │
-│ tui/     rich-based console (mailroom-tui)                                 │
+│ tui/     mailroom-tui — typed-command REPL (floor desk, corpus browser,   │
+│          constellation browser; commands.py/views.py/corpus.py/repos.py)  │
+│ terminal/ owlcot-family terminal site (static; snapshot traces + LIVE Hub │
+│          corpus via datasets-server; staged to gh-pages:/docs/terminal/)  │
 │ operator_desk/  JWT, local archive, Langfuse-backed ops, bin observer     │
 │ ui/      optional React desk (/desk when built; Node never required)      │
 └────────────────────────────────────────────────────────────────────────────┘
 ```
+
+**Corpus + constellation surfaces** (TUI and terminal site): the
+`mailroom-dataset` Hub dataset is read through the canonical
+`mailroom_ui/hf_corpus.py` ladder — slim windowed listing (2 requests per
+page, instant), one-time slim catalog for search/stats, and per-row live
+`doc_text`/ground-truth fetches (LRU-capped). `tui/repos.py` +
+`terminal/js/data.js` carry the constellation manifest (every package the
+monorepo mirrors upstream — contract-tested against `packages_sync.json` —
+plus the hub copies `mailroom-dev`/`mailroom-hub`/`LLM-Postal` and the
+derived graph sites). The static site bundles a slim catalog
+(`scripts/export_corpus_catalog.py` → `site/data/corpus.json`, 3,302 rows)
+so listing/search/stats work offline; `corpus show` fetches rows live
+(datasets-server CORS is verified for the Pages origin).
 
 ## Data flow
 
@@ -75,7 +92,7 @@ A `document-pipeline` trace carries:
   (PDF/image ingest), **SPAN** (intake, catalog, archive, review route),
   **GENERATION** (`pipeline-result`, LegalBench `answer-question`, and
   auto-traced LLM calls). Verb-first names map to stages by
-  `pipeline_schema.SPAN_STAGE_MAP` (`ingest-document`, `classify-document`,
+  `pipeline_schema.SPAN_STAGE_MAP` (`intake-document`, `classify-document`,
   `judge-verify`, `arbitrate-verdict`, `extract-fields`, `route-for-review`,
   `adjudicate-conflict`, `compile-report`, `write-catalog`,
   `archive-document`, …). The root chain is shown in the inspector and
@@ -172,6 +189,16 @@ Langfuse-shaped dicts `interpret_trace` consumes; unmapped spans degrade to
 unknown staging per the breakage map), and `MultiSource` (fan-out reads,
 per-trace isolation, aggregated health).
 
+mailroom-reloaded (the CrewAI-Flows pipeline) is read through the same
+Phoenix source: its `mailroom.document` root and `mailroom.node.<node>` spans
+map to stations via `RELOADED_NODE_STAGES` in `pipeline_schema.py`, and the
+root's `mailroom.status` / `mailroom.doc_id` / `mailroom.filename` /
+`mailroom.run_id` / `mailroom.doc_type` attributes fill the trace input,
+output and session (`parked` shows on the REVIEW siding; consecutive repeated
+`sort` / `extract` spans fold into the retry stages). Only attributes the
+pipeline actually set are lifted. Set `MAILROOM_PHOENIX_PROJECT` to the
+mailroom-reloaded project (eval runs use `eval-<run_id>`).
+
 Debug surfaces for agents: pixel-console ring at
 `window.__MAILROOM_DEBUG__` (`dump()` / `export()`, enabled verbosely by
 `?debug=1` or the CONSOLE tab's DEBUG toggle); Observatory ring at
@@ -243,8 +270,8 @@ built and served at `/desk` when `ui/dist` exists. Default `mailroom-web`
 does not need Node. Pixel console and Observatory stay vanilla.
 
 The producer **code** pin is optional extra `[pipeline]`
-(`mailroom @ git+https://github.com/Exios66/llm-mailroom.git@3cf9fb9`,
-package 0.6.0 / tag `v0.6.0`).
+(`mailroom @ git+https://github.com/Exios66/llm-mailroom.git@959bb0bce152`,
+package 0.7.1 / main after tag `v0.7.1`).
 `mailroom_ui/producer.py` imports `pipeline.review_resolve` and
 `schemas.manifest` when that extra or a sibling checkout is present; the
 REVIEW proxy and `tests/fake_producer.py` use those contract helpers

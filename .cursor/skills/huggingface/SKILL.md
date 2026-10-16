@@ -1,19 +1,19 @@
 ---
 name: huggingface
-description: Hugging Face usage for The-Mailroom eval/pilot scripts (docclass-merged GT, HF_TOKEN, run_production_pilot, eval_pipeline). Use for Hub datasets and copied dojo catalogs; prefer offline pytest fixtures; never import llm-dojo-scoring at runtime or start a live Qwen/Hub pilot unless the user explicitly asks.
+description: Hugging Face usage for The-Mailroom eval/pilot scripts (mailroom-dataset GT, HF_TOKEN, run_production_pilot, eval_pipeline). Use for Hub datasets and copied dojo catalogs; prefer offline pytest fixtures; never import llm-dojo-scoring at runtime or start a live Qwen/Hub pilot unless the user explicitly asks.
 ---
 
 # Hugging Face (eval + catalogs, not serving)
 
 **When:** `scripts/eval_pipeline.py`, `scripts/run_production_pilot.py`,
 `scripts/sync_pilot_dataset.py`, `HF_TOKEN`,
-`Lucius-Morningstar/docclass-merged`, or Hub subclass catalogs.  
+`Lucius-Morningstar/mailroom-dataset`, or Hub subclass catalogs.  
 **This visualizer does not download weights or serve models.** Serving is
 [ollama](../ollama/SKILL.md) / [modal](../modal/SKILL.md) in sister repos.
 
 ## Authoritative corpus
 
-Pin **`Lucius-Morningstar/docclass-merged`** (corrected GT tip —
+Pin **`Lucius-Morningstar/mailroom-dataset`** (corrected GT tip —
 `MAILROOM_HF_REVISION`, default in `mailroom_ui/hf_corpus.py`) for labels
 and pilot intake. Prefer that over the smaller `docclass-pilot` examples
 pack. Hub rows go through the datasets-server REST API (revision query)
@@ -22,7 +22,7 @@ so eval / sync stay light — no full `load_dataset` on the visualizer path.
 | Env | Role |
 | --- | --- |
 | `HF_TOKEN` | Hub auth |
-| `MAILROOM_HF_DATASET` | default `Lucius-Morningstar/docclass-merged` |
+| `MAILROOM_HF_DATASET` | default `Lucius-Morningstar/mailroom-dataset` |
 | `MAILROOM_HF_REVISION` | corrected GT commit pin |
 | `MAILROOM_HF_CONFIG` | `ground_truth` |
 | `HF_HOME` / `HF_HUB_CACHE` | producer volume cache (Railway) |
@@ -33,8 +33,8 @@ so eval / sync stay light — no full `load_dataset` on the visualizer path.
 | --- | --- | --- |
 | Pytest traces | `tests/fake_langfuse.py` | No |
 | Copied Hub subclass / CUAD keys | `mailroom_ui/pipeline_schema.py` | No |
-| Dojo scoring pin | docs + copied constants (`@v0.11.0`) | No runtime import |
-| Live `docclass-merged` eval | `scripts/eval_pipeline.py` | **Yes** (explicit) |
+| Dojo scoring pin | docs + copied constants (`@v0.16.0`) | No runtime import |
+| Live `mailroom-dataset` eval | `scripts/eval_pipeline.py` | **Yes** (explicit) |
 | Sync merged → Langfuse dataset | `scripts/sync_pilot_dataset.py` | **Yes** (explicit) |
 | Live Qwen 3.7-Flash pilot | `scripts/run_production_pilot.py --real` | **Yes** (explicit) |
 
@@ -66,5 +66,5 @@ Space SDK or a Hub model server here.
 
 - Schema mirror: [pipeline-schema-sync](../pipeline-schema-sync/SKILL.md)
 - Router: [mailroom-tool-router](../mailroom-tool-router/SKILL.md)
-- Pin: README constellation table (`llm-dojo-scoring` `@v0.11.0`;
-  llm-mailroom dist `mailroom` `@3cf9fb9` / v0.6.0 via extra `[pipeline]`)
+- Pin: README constellation table (`llm-dojo-scoring` `@v0.16.0`;
+  llm-mailroom dist `mailroom` `@959bb0bce152` / 0.7.1+ (main after v0.7.1) via extra `[pipeline]`)
