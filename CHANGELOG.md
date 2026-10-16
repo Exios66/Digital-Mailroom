@@ -22,6 +22,26 @@ and is recorded there, not here.
 ## [Unreleased]
 ### Added
 
+- **DMR-079 pre-prune baseline — feeder import (upstream wins):** squash
+  subtree pulls of every standalone tip with independent progress, landed
+  monorepo-side only (no push upstream). `llm-dojo-scoring` `1c4a798e`
+  (52 commits, v0.21.0), `llm-mailroom` `a5bf7c8a` (207 commits, v0.8.0),
+  `local-mailroom-sandbox` `850e75b2` (105 commits, v0.3.0), `The-Mailroom`
+  `d5358650` (5 commits, v0.5.1); `mailroom-corpus-eda` re-baselined to
+  `c5053160` (already contained). 46 conflicting paths resolved to the
+  upstream side (human directive: standalone repos hold current progress).
+  `modal` deploy pin aligned to `1.6.1` in `llm-mailroom` + entity-extraction
+  (sandbox upstream moved to 1.6.1; the workspace lock was unsatisfiable);
+  `uv.lock` regenerated; sandbox `vendor/` refreshed. Workspace dojo also
+  carries the 9 unreleased v0.22.0 commits (upstream branch
+  `claude/cool-wozniak-o044u4`, `852b0527`) the sandbox vendor already
+  depends on. Post-import repairs: The-Mailroom #111 BERT panels re-wired
+  (lost to the upstream-side resolution) + ArchiveBrowser filter set to the
+  five live classes; llm-mailroom moved-doc links, notebook 00 restored,
+  dojo-parity xfail non-strict in the workspace; sandbox prompt pins
+  regenerated + modal 1.6.1 / `config/runs/sand032/` test pins. This release
+  is the rollback point before the DMR-079 consolidation prune.
+
 - **DMR-078: A100 cost-per-token evidence into `packages/local-mailroom-sandbox`:**
   per-leg run manifest builder (`scripts/build_a100_manifest.py` →
   `reports/a100-run-manifest.{md,csv}`, 32 A100 legs, deterministic, cost from the
