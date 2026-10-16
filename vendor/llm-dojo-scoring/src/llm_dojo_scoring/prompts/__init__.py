@@ -1,8 +1,9 @@
 """Importable prompt catalog for llm-dojo-scoring.
 
-Vendors live production templates plus the latest docclass-merged family.
-Metric bundle and field-map live on the record metadata — never as eval
-targets in the model-visible string.
+Vendors live production templates, the latest docclass-merged family, and the
+eval-environment frozen ``production_prompts`` v1 lineage (sha256-locked
+specialist stems). Metric bundle and field-map live on the record metadata —
+never as eval targets in the model-visible string.
 
 Non-LLM roles (intake clerk, archivist, local-vs-API serving comparison,
 proposed auditors) are catalogued with empty ``text`` and an honest ``kind``.
@@ -18,6 +19,19 @@ from typing import Iterable
 
 import yaml
 
+from .lineage import (
+    LINEAGE_SOURCE,
+    PromptVersion,
+    clear_lineage_cache,
+    default_prompt_version,
+    diff_prompt_versions,
+    get_prompt_version,
+    latest_prompt_version,
+    list_prompt_versions,
+    prompt_chain,
+    prompt_roles,
+)
+
 __all__ = [
     "PromptRecord",
     "FAMILIES",
@@ -25,9 +39,19 @@ __all__ = [
     "get_prompt",
     "list_prompts",
     "clear_prompt_cache",
+    # eval-environment prompt lineage (llm_dojo_scoring.prompts.lineage)
+    "PromptVersion",
+    "LINEAGE_SOURCE",
+    "list_prompt_versions",
+    "get_prompt_version",
+    "prompt_roles",
+    "prompt_chain",
+    "latest_prompt_version",
+    "default_prompt_version",
+    "diff_prompt_versions",
 ]
 
-FAMILIES = ("production", "docclass")
+FAMILIES = ("production", "docclass", "production_prompts")
 KINDS = ("llm", "deterministic", "procedural", "proposed")
 
 _PROVENANCE_COMMENT = re.compile(r"^\s*<!--.*?-->\s*", re.DOTALL)
@@ -49,6 +73,8 @@ class PromptRecord:
     priming: tuple[str, ...] = ()
     notes: str = ""
     template: str | None = None
+    sha256: str = ""
+    source_commit: str = ""
 
     @property
     def key(self) -> tuple[str, str]:
@@ -95,6 +121,8 @@ def _record_from_row(row: dict) -> PromptRecord:
         priming=tuple(str(p) for p in priming),
         notes=str(row.get("notes") or ""),
         template=template,
+        sha256=str(row.get("sha256") or ""),
+        source_commit=str(row.get("source_commit") or ""),
     )
 
 
@@ -107,8 +135,9 @@ def _catalog() -> tuple[PromptRecord, ...]:
 
 
 def clear_prompt_cache() -> None:
-    """Drop the loaded catalog (test isolation)."""
+    """Drop the loaded catalog and eval-environment lineage (test isolation)."""
     _catalog.cache_clear()
+    clear_lineage_cache()
 
 
 def list_prompts(
@@ -134,7 +163,9 @@ def get_prompt(agent: str, family: str = "production") -> PromptRecord:
     """Return the catalog entry for ``(agent, family)``.
 
     ``family`` defaults to ``"production"``. Docclass-merged arms use
-    ``family="docclass"``. Raises ``KeyError`` when the pair is unknown.
+    ``family="docclass"``; the eval-environment frozen v1 specialist stems
+    use ``family="production_prompts"``. Raises ``KeyError`` when the pair
+    is unknown.
     """
     for rec in _catalog():
         if rec.agent == agent and rec.family == family:

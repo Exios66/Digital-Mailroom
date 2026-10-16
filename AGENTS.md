@@ -109,7 +109,7 @@ sandbox beacon update --job ID --package P --done N --total M   # shell jobs pub
 ```
 
 - Config: `config/profiles/*.yaml` + `config/taxonomy.overlay.yaml` + `config/components.yaml` + `config/models.yaml` + `config/runbooks/catalog.yaml`.
-- Remote serving (Modal / SSH-tunneled vLLM / CHTC / conda): `docs/setting-up/remote-serving.md` + `deploy/htcondor/` + `deploy/conda/`. Modal deploy workflow (SDK pinned `modal==1.5.5`; pre-warm → deploy → verify → teardown, cost guards, troubleshooting) lives in `deploy/README.md`. CLI rule: pass `--profile` AFTER the subcommand (or via `SANDBOX_PROFILE`) — a `--profile` before the subcommand is clobbered by the subparser default.
+- Remote serving (Modal / SSH-tunneled vLLM / CHTC / conda): `docs/setting-up/remote-serving.md` + `deploy/htcondor/` + `deploy/conda/`. Modal deploy workflow (SDK pinned `modal==1.6.1`; pre-warm → deploy → verify → teardown, cost guards, troubleshooting) lives in `deploy/README.md`. CLI rule: pass `--profile` AFTER the subcommand (or via `SANDBOX_PROFILE`) — a `--profile` before the subcommand is clobbered by the subparser default.
 - Runtime taxonomy is written to `data/runtime/taxonomy.yaml` (gitignored).
 - Prepared fixtures: `data/runtime/prepared/` via notebooks or `sandbox datasets prepare`.
 - Experiment log: `reports/experiment_log.jsonl` (sandbox-local, not a sister-repo mirror).
@@ -140,6 +140,21 @@ sandbox beacon update --job ID --package P --done N --total M   # shell jobs pub
   `correspondence_specialist`, `insurance_claim` →
   `insurance_claims_specialist`. Merger no longer rides the CUAD contracts
   agent.
+
+## Specialist extraction guidance
+
+- `config/prompts/corporate_records_specialist_simplified.txt`, line 11:
+  `subsidiary_list` maps to `record_type: other`; extract the parent into
+  `entity_name`, describe the subsidiary listing in `subject_matter`, and use
+  subsidiary names as `keywords`. Leave `filing_number` null unless an official
+  filing or document number is present; never use an exhibit ID.
+- `config/prompts/correspondence_specialist_simplified.txt`, lines 14 and 33:
+  emit null for `communication_type` when no registered token fits the text;
+  still extract sender, recipient, and date from headers. Never invent a type.
+
+Keep extraction guidance aligned with these frozen rules; see
+[prompt guidance](config/prompts/README.md#extraction-rules-in-the-re-frozen-v1-stems)
+for source links and registered communication types.
 
 ## Architecture gotchas
 
