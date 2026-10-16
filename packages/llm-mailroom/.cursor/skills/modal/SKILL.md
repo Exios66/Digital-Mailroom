@@ -59,5 +59,5 @@ Every agent still goes through `get_llm()`. Flip back with
 
 - Production default: [openrouter](../openrouter/SKILL.md)
 - Hub weights: [huggingface](../huggingface/SKILL.md)
-- Docs: `docs/modal-vllm.md` (GitBook; listed in `docs/SUMMARY.md`)
-- Host compose: `docs/docker-deployment.md`
+- Docs: `docs/pipeline-reference-llm-mailroom/deployment/modal-vllm.md` (GitBook; listed in `docs/SUMMARY.md`)
+- Host compose: `docs/pipeline-reference-llm-mailroom/deployment/docker-deployment.md`

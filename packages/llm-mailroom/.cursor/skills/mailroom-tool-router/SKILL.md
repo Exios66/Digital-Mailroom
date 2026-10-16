@@ -54,7 +54,7 @@ No agent code names a provider/model. `taxonomy.yaml` `agents:` + `get_llm(agent
 | --- | --- |
 | Taxonomy / models | `src/config/taxonomy.yaml` |
 | Env template | `.env.example` |
-| Providers | `src/llm/providers.py`, `docs/configuration.md` |
+| Providers | `src/llm/providers.py`, `docs/pipeline-reference-llm-mailroom/configuration.md` |
 | Compose | `src/config/docker/docker-compose.yml` |
 | REVIEW producer image | root `Dockerfile`, `deploy/docker-compose.producer.yml`, `src/scripts/publish_space.py` |
 | Modal app | `deploy/modal_vllm.py` |

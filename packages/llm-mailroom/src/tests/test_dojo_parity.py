@@ -35,7 +35,10 @@ def test_live_specialists_equal_dojo_production():
 
 
 @pytest.mark.xfail(
-    strict=True,
+    # non-strict: the monorepo resolves the WORKSPACE llm-dojo-scoring, which may
+    # already carry `intent: label` (XPASS), while the standalone repo's pinned
+    # tag still has `intent: name` (XFAIL). Both outcomes are legitimate.
+    strict=False,
     raises=AssertionError,
     reason="dojo v0.21.0 DEFAULT_FIELD_TYPES still has intent: name; mailroom taxonomy uses label (plan Task 11 re-pins the fixture)",
 )
