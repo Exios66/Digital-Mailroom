@@ -37,6 +37,22 @@ and is recorded there, not here.
   llm-mailroom + dojo prompt surfaces) updated. `labels.json` keeps the
   retired `domain/*` labels for historical issues.
 
+### Changed
+
+- **`llm-dojo-scoring` pin → `v0.22.0` (tagged + published 2026-10-16).** The
+  Phase-1 feeder import carried the 9 unreleased commits toward v0.22.0
+  (upstream branch `claude/cool-wozniak-o044u4`, `852b0527`); the tag was then
+  cut upstream (`a2862cec`) and imported as a release, repinning
+  `packages/llm-mailroom` `pyproject.toml` to `@v0.22.0`. v0.22.0 is a
+  breaking scoring release (strict `metric_id_for`, required emitter
+  provenance, `token_price_estimate` cost basis, archive scoring
+  `status`/`reason`); llm-mailroom's guard + parity tests pass against it, and
+  the workspace taxonomy `field_types` now matches the dojo
+  `DEFAULT_FIELD_TYPES` (`intent: label`), so the dojo-parity `xfail` is
+  retired. Vendor snapshots refreshed to the tag (`sync_vendor.py`); stale
+  `v0.21.0` / "pre-tag `852b052`" claims corrected across the llm-mailroom and
+  sandbox docs.
+
 ## [0.8.0] - 2026-10-16
 ### Added
 
