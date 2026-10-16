@@ -39,7 +39,7 @@ Multi-agent legal-document pipeline · Deterministic scoring · Pixel-art visual
                     └──────────────────────────┬───────────────────────────┘
                                                ▼
                     ┌──────────────────────────────────────────────────────┐
-                    │            Digital-Mailroom — this standalone repo     │
+                    │            Digital-Mailroom — this standalone repo   │
                     │        (central truth; every box lives in it)        │
                     └──────────────────────────────────────────────────────┘
 ```
