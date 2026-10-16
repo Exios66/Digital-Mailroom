@@ -99,7 +99,7 @@ DEFAULT_FIELD_TYPES: dict[str, dict[str, str]] = {
         "signatories": "entity_list:name",
         "jurisdiction": "name",
         "filing_number": "id",
-        "intent": "name",
+        "intent": "label",
         "subject_matter": "free_text",
         "keywords": "entity_list:name",
     },
@@ -121,7 +121,7 @@ DEFAULT_FIELD_TYPES: dict[str, dict[str, str]] = {
         "demand_amount": "money",
         "action_items": "entity_list",
         "urgency": "name",
-        "intent": "name",
+        "intent": "label",
         "subject_matter": "free_text",
         "keywords": "entity_list:name",
     },
@@ -162,7 +162,7 @@ DEFAULT_FIELD_TYPES: dict[str, dict[str, str]] = {
         "coverage_determination": "name",
         "denial_reasons": "entity_list:free_text",
         "supporting_documents": "entity_list",
-        "intent": "name",
+        "intent": "label",
         "subject_matter": "free_text",
         "keywords": "entity_list:name",
         "claim_checklist": "entity_list:free_text",
@@ -742,6 +742,7 @@ class ScoringSuite:
         from .scorecard_honesty import (
             GtAssessment,
             assess_extraction_gt,
+            check_schema_promotion_gate,
             metric_id_for,
             score_format_layer,
             stamp_provenance,
@@ -843,8 +844,13 @@ class ScoringSuite:
                 _gtm.normalize_field_values(item) if isinstance(item, dict) else item
                 for item in predicted
             ]
+        format_predictions = predicted
+        if isinstance(expected, list) and isinstance(predicted, list):
+            format_predictions = [pred for _, pred in zip(expected, predicted)]
+            if isinstance(doc_text, list):
+                format_predictions = format_predictions[:len(doc_text)]
         format_scores = score_format_layer(
-            predicted=predicted if not isinstance(predicted, str) else None,
+            predicted=format_predictions if not isinstance(predicted, str) else None,
             predicted_raw=predicted if isinstance(predicted, str) else kwargs.get("predicted_raw"),
             required_keys=list(ftypes.keys()) if ftypes else None,
         )
@@ -882,14 +888,18 @@ class ScoringSuite:
         if scoped_to_empty and not presence:
             assessment = GtAssessment("unscorable", "gt_no_extractable_fields")
         if not assessment.scorable and not isinstance(expected, list):
-            return stamp_provenance(
-                unscorable_extraction_result(
-                    assessment,
-                    doc_class=doc_class,
-                    metric_id=metric_id_for(
-                        "extraction_overall_score", doc_class=doc_class
-                    ),
+            unscorable = unscorable_extraction_result(
+                assessment,
+                doc_class=doc_class,
+                metric_id=metric_id_for(
+                    "extraction_overall_score", doc_class=doc_class
                 ),
+            )
+            unscorable["schema_promotion_gate"] = check_schema_promotion_gate(
+                None, doc_class=doc_class
+            )
+            return stamp_provenance(
+                unscorable,
                 metric_id=metric_id_for(
                     "extraction_overall_score", doc_class=doc_class
                 ),
@@ -1118,6 +1128,9 @@ class ScoringSuite:
                     "extraction": extraction,
                     **prf_payload,
                     **format_scores,
+                    "schema_promotion_gate": check_schema_promotion_gate(
+                        format_scores.get("schema_valid"), doc_class=doc_class
+                    ),
                     "metric_id": metric_id_for(
                         "extraction_overall_score", doc_class=doc_class
                     ),
@@ -1142,12 +1155,9 @@ class ScoringSuite:
             doc_class=doc_class,
             presence_mode=bool(presence),
         )
-        if doc_class == "insurance_claim":
-            from .scorecard_honesty import check_schema_promotion_gate
-
-            filtered["schema_promotion_gate"] = check_schema_promotion_gate(
-                format_scores.get("schema_valid")
-            )
+        filtered["schema_promotion_gate"] = check_schema_promotion_gate(
+            format_scores.get("schema_valid"), doc_class=doc_class
+        )
         payload = {
             "extraction": extraction,
             **prf_payload,
