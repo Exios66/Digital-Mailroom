@@ -1148,6 +1148,12 @@ def run_verify_suite(package: str, *, dry_run: bool = False) -> tuple[bool, str]
     try:
         proc = subprocess.run(cmd, cwd=str(REPO_ROOT), env=env, text=True,
                               capture_output=True, timeout=3600)
+    except FileNotFoundError:
+        # DMR-083: a workspace marker with no `uv` on PATH is a broken
+        # toolchain, not a crash — refuse like the timeout/red-suite siblings.
+        warn(f"!! {package}: verify-suite runner {cmd[0]!r} not found on PATH — "
+             "refusing to advance (DMR-070 --verify-suite)")
+        return False, "verify-suite runner not found"
     except subprocess.TimeoutExpired:
         warn(f"!! {package}: verify-suite TIMED OUT after 3600s — refusing to advance")
         return False, "verify-suite timed out"

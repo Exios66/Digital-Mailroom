@@ -899,6 +899,31 @@ class TestVerifyCmdInterpreter(unittest.TestCase):
             os.environ["SYNC_VERIFY_CMD"] = "stub-suite --flag"
             self.assertEqual(mod._verify_cmd(PKG), ["stub-suite", "--flag"])
 
+    def test_o2_verify_suite_missing_runner_refuses_cleanly(self):
+        """DMR-083 D1: a workspace marker with no `uv` on PATH is a broken
+        toolchain — `run_verify_suite` returns the refusal tuple its callers
+        already map to E_VERIFY, never an uncaught FileNotFoundError."""
+        mod = _load_sync_module()
+        root = Path(tempfile.mkdtemp(prefix="dmr083-nouv-"))
+        self.addCleanup(shutil.rmtree, root, ignore_errors=True)
+        (root / "packages" / PKG / "tests").mkdir(parents=True)
+        (root / "uv.lock").write_text("")
+        empty_bin = root / "empty-bin"  # a PATH with no `uv` in it
+        empty_bin.mkdir()
+        saved_root = mod.REPO_ROOT
+        mod.REPO_ROOT = root
+        self.addCleanup(setattr, mod, "REPO_ROOT", saved_root)
+        env = {k: v for k, v in os.environ.items()
+               if k not in ("SYNC_VERIFY_CMD", "PATH")}
+        env["PATH"] = str(empty_bin)
+
+        with mock.patch.dict(os.environ, env, clear=True):
+            self.assertEqual(mod._verify_cmd(PKG),
+                             ["uv", "run", "pytest", f"packages/{PKG}/tests",
+                              "-q", "--no-header", "-x"])
+            self.assertEqual(mod.run_verify_suite(PKG),
+                             (False, "verify-suite runner not found"))
+
 
 class TestSilentNoOpGuard(unittest.TestCase):
     """DMR-073: a push rc==0 is NOT evidence of a landing.
