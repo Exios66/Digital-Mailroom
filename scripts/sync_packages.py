@@ -1109,7 +1109,11 @@ def _verify_cmd(package: str) -> list[str] | None:
     """Verify-suite command for a package (DMR-070 --verify-suite).
 
     Default: the package's pytest suite (``packages/<pkg>/tests`` or
-    ``packages/<pkg>/src/tests``). ``SYNC_VERIFY_CMD`` (shlex-split)
+    ``packages/<pkg>/src/tests``) run with the PROJECT interpreter —
+    ``uv run pytest`` when this is a uv workspace (``uv.lock`` or ``.venv``
+    at the repo root; ``sys.executable`` is the host python, which may ship
+    no pytest — DMR-083), else ``[sys.executable, -m pytest]`` so the tool
+    still works outside the workspace. ``SYNC_VERIFY_CMD`` (shlex-split)
     overrides — the hermetic tests inject stubs through it. None when the
     package ships no recognizable tests dir (trivially green).
     """
@@ -1120,7 +1124,9 @@ def _verify_cmd(package: str) -> list[str] | None:
         return shlex.split(override)
     for tests_dir in (f"packages/{package}/tests", f"packages/{package}/src/tests"):
         if (REPO_ROOT / tests_dir).is_dir():
-            return [sys.executable, "-m", "pytest", tests_dir, "-q", "--no-header", "-x"]
+            workspace = (REPO_ROOT / "uv.lock").exists() or (REPO_ROOT / ".venv").exists()
+            runner = ["uv", "run", "pytest"] if workspace else [sys.executable, "-m", "pytest"]
+            return [*runner, tests_dir, "-q", "--no-header", "-x"]
     return None
 
 
