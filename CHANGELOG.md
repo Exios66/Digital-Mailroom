@@ -22,24 +22,25 @@ and is recorded there, not here.
 ## [Unreleased]
 ### Removed
 
-- **DMR-079 consolidation prune — the core monorepo is now 7 members**
-  (`llm-mailroom`, `llm-dojo-scoring`, `The-Mailroom`,
+- **DMR-079 consolidation prune — the core monorepo is now 7 members:**
+  `llm-mailroom`, `llm-dojo-scoring`, `The-Mailroom`,
   `local-mailroom-sandbox`, `mailroom-corpus-eda` + feeds
-  `Enron-Evaluation-Environment`, `claims-data-eda`). Removed:
+  `Enron-Evaluation-Environment`, `claims-data-eda`. Removed:
   `packages/llm-entity-extraction` (eval loop, 15.2 MB),
   `packages/llm-mailroom-graph` (derived graphify site, 6.1 MB) and
-  `packages/agent-mailroom` (now on branch `feature/agent-mailroom`). The
-  standalone Exios66 repos remain; v0.8.0 is the last hub release containing
-  them. Workspace + `uv.lock` (drops `langchain`, `pdf2image`), sync map +
-  cursors (status 7/7), taxonomy parity (entity sorter surface removed),
-  The-Mailroom constellation registry (pruned + all graph sites), issue
-  templates, docs/wiki, and project personas (prompt-engineer rescoped to
-  llm-mailroom + dojo prompt surfaces) updated. `labels.json` keeps the
+  `packages/agent-mailroom` (0.8 MB; now on branch `feature/agent-mailroom`).
+  The standalone Exios66 repos remain; v0.8.0 is the last hub release
+  containing them. Workspace + `uv.lock` (drops `langchain`, `pdf2image`),
+  sync map + cursors (status 7/7), taxonomy parity (entity sorter surface
+  removed), The-Mailroom constellation registry (pruned + all graph sites),
+  issue templates, docs/wiki, project personas (prompt-engineer rescoped to
+  llm-mailroom + dojo prompt surfaces), and corpus-eda's `merger_agreement`
+  routing note + pruned-package references updated. `labels.json` keeps the
   retired `domain/*` labels for historical issues.
 
 ### Changed
 
-- **`llm-dojo-scoring` pin → `v0.22.0` (tagged + published 2026-10-16).** The
+- **`llm-dojo-scoring` pin → `v0.22.0` (tagged + published 2026-10-16):** the
   Phase-1 feeder import carried the 9 unreleased commits toward v0.22.0
   (upstream branch `claude/cool-wozniak-o044u4`, `852b0527`); the tag was then
   cut upstream (`a2862cec`) and imported as a release, repinning
@@ -52,6 +53,52 @@ and is recorded there, not here.
   retired. Vendor snapshots refreshed to the tag (`sync_vendor.py`); stale
   `v0.21.0` / "pre-tag `852b052`" claims corrected across the llm-mailroom and
   sandbox docs.
+
+- **Dojo `v0.22.0` pin + doc sweep propagated to the three standalone
+  `Exios66` mirrors (DMR-079 follow-on):** `llm-dojo-scoring`
+  `a2862cec`→`5431881c`, `local-mailroom-sandbox` `850e75b2`→`ee9c5952` and
+  `llm-mailroom` `a5bf7c8a`→`0fd60717`, riding the content-only
+  `push --patch` leg of the DMR-070 decision tree (all three single-parent
+  fast-forwards; no tag or non-`main` branch moved, and `comm -23 <before>
+  <after>` is empty on all three — **no tracked path was deleted**; the
+  delta is content-only by the DMR-070 definition).
+  `llm-mailroom` was deletion-bearing because the monorepo had purged 6 pages
+  for repos that still exist standalone; those 6 were restored
+  **byte-identical** in the monorepo (matching upstream)
+  (`docs/constellation/repos/{agent-mailroom,llm-entity-extraction,llm-mailroom-graph}.md`
+  + the `docs/repository-guides/repos/` twins) so the pin could ride the
+  content-only leg — parity, not adoption (they stay out of
+  `docs/SUMMARY.md`, so the DMR-079 "retired" index remains the published
+  truth). Sync cursors re-baselined; `sync_packages.py status` 7/7 in sync.
+  PRs [#135](https://github.com/LLM-Mailroom-Services/Digital-Mailroom/pull/135)
+  (`c9b9a68a`, the restore) and
+  [#136](https://github.com/LLM-Mailroom-Services/Digital-Mailroom/pull/136)
+  (`fa568bd0`, the cursors).
+
+- **DMR-079 close-out: the consolidation card archived + two findings carried
+  forward (DMR-080, DMR-081):** [#134](https://github.com/LLM-Mailroom-Services/Digital-Mailroom/pull/134)
+  / `e8558a68` archived the card; carried, **not fixed here**, are
+  **DMR-080** (branch protection still requires the status context `ci`, but
+  the `ci` workflow was deleted in `86406a56`
+  ([#104](https://github.com/LLM-Mailroom-Services/Digital-Mailroom/pull/104)),
+  so every PR to `main` reads `BLOCKED` and merges need `--admin`) and
+  **DMR-081** (`board_state.py`'s `archive-date-utc-convention` check is
+  unreachable — it sits in the open-card loop — so archive rows are never
+  date-checked).
+
+### Fixed
+
+- **`sync_packages.py --verify-suite` resolved the host interpreter, refusing
+  good trees at the release train's pre-push gate (DMR-083):** `_verify_cmd`
+  returned `[sys.executable, "-m", "pytest", …]`, and `sys.executable` is the
+  host python, which ships no pytest — so `push --patch --verify-suite` failed
+  with exit 5 / `error_class: verify` / `No module named pytest`. It now
+  resolves the **project** interpreter (`uv run pytest` when a uv workspace
+  marker is present, else `sys.executable`), and a missing runner refuses
+  cleanly instead of raising an uncaught traceback. Pinned by two hermetic
+  tests (`scripts/tests`, 52 → 54).
+  [PR #138](https://github.com/LLM-Mailroom-Services/Digital-Mailroom/pull/138)
+  / `81e97596`.
 
 ## [0.8.0] - 2026-10-16
 ### Added
