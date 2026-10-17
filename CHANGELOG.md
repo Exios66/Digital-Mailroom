@@ -60,10 +60,11 @@ and is recorded there, not here.
   `llm-mailroom` `a5bf7c8a`→`0fd60717`, riding the content-only
   `push --patch` leg of the DMR-070 decision tree (all three single-parent
   fast-forwards; no tag or non-`main` branch moved, and `comm -23 <before>
-  <after>` is empty on all three — no independent-repo content was removed).
+  <after>` is empty on all three — **no tracked path was deleted**; the
+  delta is content-only by the DMR-070 definition).
   `llm-mailroom` was deletion-bearing because the monorepo had purged 6 pages
   for repos that still exist standalone; those 6 were restored
-  **byte-identical** to the monorepo
+  **byte-identical** in the monorepo (matching upstream)
   (`docs/constellation/repos/{agent-mailroom,llm-entity-extraction,llm-mailroom-graph}.md`
   + the `docs/repository-guides/repos/` twins) so the pin could ride the
   content-only leg — parity, not adoption (they stay out of
