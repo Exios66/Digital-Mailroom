@@ -865,6 +865,66 @@ class TestVerifySuiteGate(SyncScriptTest):
         self.assertEqual(rec["resolution_divergences"], [])
 
 
+class TestVerifyCmdInterpreter(unittest.TestCase):
+    """DMR-083: the default verify command runs the package suite with the
+    PROJECT interpreter. On this host ``sys.executable`` is a homebrew
+    python3.15 with no pytest, so the shipped default refused a good tree
+    (exit 5 / error_class verify / "No module named pytest"); in a uv
+    workspace (``uv.lock`` or ``.venv`` at the repo root) it must be
+    ``uv run pytest``. ``SYNC_VERIFY_CMD`` still wins; a plain checkout
+    still falls back to ``sys.executable -m pytest``."""
+
+    def test_o_verify_cmd_interpreter_selection(self):
+        mod = _load_sync_module()
+        root = Path(tempfile.mkdtemp(prefix="dmr083-verify-"))
+        self.addCleanup(shutil.rmtree, root, ignore_errors=True)
+        (root / "packages" / PKG / "tests").mkdir(parents=True)
+        saved_root = mod.REPO_ROOT
+        mod.REPO_ROOT = root
+        self.addCleanup(setattr, mod, "REPO_ROOT", saved_root)
+        suite = [f"packages/{PKG}/tests", "-q", "--no-header", "-x"]
+        clean_env = {k: v for k, v in os.environ.items() if k != "SYNC_VERIFY_CMD"}
+
+        with mock.patch.dict(os.environ, clean_env, clear=True):
+            # no workspace marker → this checkout's own interpreter
+            self.assertEqual(mod._verify_cmd(PKG), [sys.executable, "-m", "pytest", *suite])
+            # uv workspace → the project interpreter (the DMR-083 defect)
+            (root / "uv.lock").write_text("")
+            self.assertEqual(mod._verify_cmd(PKG), ["uv", "run", "pytest", *suite])
+            # either marker qualifies (a .venv-only checkout)
+            (root / "uv.lock").unlink()
+            (root / ".venv").mkdir()
+            self.assertEqual(mod._verify_cmd(PKG), ["uv", "run", "pytest", *suite])
+            # the override outranks the interpreter rule
+            os.environ["SYNC_VERIFY_CMD"] = "stub-suite --flag"
+            self.assertEqual(mod._verify_cmd(PKG), ["stub-suite", "--flag"])
+
+    def test_o2_verify_suite_missing_runner_refuses_cleanly(self):
+        """DMR-083 D1: a workspace marker with no `uv` on PATH is a broken
+        toolchain — `run_verify_suite` returns the refusal tuple its callers
+        already map to E_VERIFY, never an uncaught FileNotFoundError."""
+        mod = _load_sync_module()
+        root = Path(tempfile.mkdtemp(prefix="dmr083-nouv-"))
+        self.addCleanup(shutil.rmtree, root, ignore_errors=True)
+        (root / "packages" / PKG / "tests").mkdir(parents=True)
+        (root / "uv.lock").write_text("")
+        empty_bin = root / "empty-bin"  # a PATH with no `uv` in it
+        empty_bin.mkdir()
+        saved_root = mod.REPO_ROOT
+        mod.REPO_ROOT = root
+        self.addCleanup(setattr, mod, "REPO_ROOT", saved_root)
+        env = {k: v for k, v in os.environ.items()
+               if k not in ("SYNC_VERIFY_CMD", "PATH")}
+        env["PATH"] = str(empty_bin)
+
+        with mock.patch.dict(os.environ, env, clear=True):
+            self.assertEqual(mod._verify_cmd(PKG),
+                             ["uv", "run", "pytest", f"packages/{PKG}/tests",
+                              "-q", "--no-header", "-x"])
+            self.assertEqual(mod.run_verify_suite(PKG),
+                             (False, "verify-suite runner not found"))
+
+
 class TestSilentNoOpGuard(unittest.TestCase):
     """DMR-073: a push rc==0 is NOT evidence of a landing.
 
