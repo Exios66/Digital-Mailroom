@@ -20,6 +20,8 @@ belongs to the standalone mailroom lineage that became `packages/llm-mailroom`
 and is recorded there, not here.
 
 ## [Unreleased]
+
+## [0.9.0] - 2026-10-17
 ### Removed
 
 - **DMR-079 consolidation prune — the core monorepo is now 7 members:**
@@ -1033,7 +1035,8 @@ agent-mailroom v0.2.0, local-mailroom-sandbox v0.1.0.
 - Upstream drift reconciled across all packages; `sync status` 10/10 in sync
   (HUB-004, HUB-018); stale pins/counts swept (HUB-010/016/018).
 
-[Unreleased]: https://github.com/LLM-Mailroom-Services/Digital-Mailroom/compare/v0.8.0...HEAD
+[Unreleased]: https://github.com/LLM-Mailroom-Services/Digital-Mailroom/compare/v0.9.0...HEAD
+[0.8.0]: https://github.com/LLM-Mailroom-Services/Digital-Mailroom/compare/v0.8.0...v0.9.0
 [0.7.0]: https://github.com/LLM-Mailroom-Services/Digital-Mailroom/compare/v0.7.0...v0.8.0
 [0.6.0]: https://github.com/LLM-Mailroom-Services/Digital-Mailroom/compare/v0.6.0...v0.7.0
 [0.5.0]: https://github.com/LLM-Mailroom-Services/Digital-Mailroom/compare/v0.5.0...v0.6.0
@@ -1045,3 +1048,4 @@ agent-mailroom v0.2.0, local-mailroom-sandbox v0.1.0.
 [0.6.0]: https://github.com/LLM-Mailroom-Services/Digital-Mailroom/releases/tag/v0.6.0
 [0.7.0]: https://github.com/LLM-Mailroom-Services/Digital-Mailroom/releases/tag/v0.7.0
 [0.8.0]: https://github.com/LLM-Mailroom-Services/Digital-Mailroom/releases/tag/v0.8.0
+[0.9.0]: https://github.com/LLM-Mailroom-Services/Digital-Mailroom/releases/tag/v0.9.0
